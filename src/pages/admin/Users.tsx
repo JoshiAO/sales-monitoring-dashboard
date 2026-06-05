@@ -158,7 +158,13 @@ const Users: React.FC = () => {
     setUploadingAvatar(userId);
     try {
       const storageRef = ref(storage, `profile_pictures/${userId}/avatar`);
-      await uploadBytes(storageRef, file);
+      
+      // Set cache control so avatars are heavily cached by the browser
+      const metadata = {
+        cacheControl: 'public, max-age=31536000',
+      };
+      
+      await uploadBytes(storageRef, file, metadata);
       const url = await getDownloadURL(storageRef);
       const urlWithCacheBuster = `${url}&t=${Date.now()}`;
       await updateDoc(doc(db, 'users', userId), { photoURL: urlWithCacheBuster });

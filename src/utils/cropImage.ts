@@ -13,11 +13,12 @@ export const getCroppedImg = async (imageSrc: string, pixelCrop: { x: number; y:
     throw new Error('No 2d context');
   }
 
-  // Set the canvas size to the cropped size
-  canvas.width = pixelCrop.width;
-  canvas.height = pixelCrop.height;
+  // Resize the canvas down to 128x128 for optimal avatar loading
+  const TARGET_SIZE = 128;
+  canvas.width = TARGET_SIZE;
+  canvas.height = TARGET_SIZE;
 
-  // Draw the cropped image onto the canvas
+  // Draw the cropped image onto the canvas and scale it down
   ctx.drawImage(
     image,
     pixelCrop.x,
@@ -26,8 +27,8 @@ export const getCroppedImg = async (imageSrc: string, pixelCrop: { x: number; y:
     pixelCrop.height,
     0,
     0,
-    pixelCrop.width,
-    pixelCrop.height
+    TARGET_SIZE,
+    TARGET_SIZE
   );
 
   // Return the canvas as a Blob
