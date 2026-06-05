@@ -301,63 +301,56 @@ const DataUpload: React.FC = () => {
           }
 
           // === RAW DATA UPLOAD ===
-          const BATCH_SIZE = 450;
-          for (let i = 0; i < json.length; i += BATCH_SIZE) {
-            const batch = writeBatch(db);
-            const chunk = json.slice(i, i + BATCH_SIZE);
+          if (category !== 'Net Invoiced') {
+            const BATCH_SIZE = 450;
+            for (let i = 0; i < json.length; i += BATCH_SIZE) {
+              const batch = writeBatch(db);
+              const chunk = json.slice(i, i + BATCH_SIZE);
 
-            chunk.forEach((row: any) => {
-              // Firebase rejects undefined values. JSON stringify strictly drops them.
-              const cleanRow = JSON.parse(JSON.stringify(row));
+              chunk.forEach((row: any) => {
+                // Firebase rejects undefined values. JSON stringify strictly drops them.
+                const cleanRow = JSON.parse(JSON.stringify(row));
 
-              if (category === 'Net Invoiced') {
-                const dateKey = cleanRow['Date'] || '';
-                const custKey = cleanRow['Sold To Customer number'] || '';
-                const prodKey = cleanRow['Product Code'] || '';
-                const rawId = `${dateKey}_${custKey}_${prodKey}`;
-                const safeId = rawId.replace(/[^a-zA-Z0-9_]/g, '') || String(Math.random()).slice(2);
-                const docRef = doc(collection(db, 'sales_transactions'), safeId);
-                batch.set(docRef, cleanRow, { merge: true });
-              } 
-              else if (category === 'CML (Customer Master List)') {
-                const customerCode = cleanRow['CUSTOMER CODE'];
-                const status = String(cleanRow['STATUS'] || '').toLowerCase();
-                
-                if (customerCode && (status === 'active/approved' || status === 'active' || status === 'approved')) {
-                  const safeId = String(customerCode).replace(/[^a-zA-Z0-9_]/g, '');
-                  const docRef = doc(collection(db, 'customers'), safeId);
-                  batch.set(docRef, cleanRow, { merge: true });
+                if (category === 'CML (Customer Master List)') {
+                  const customerCode = cleanRow['CUSTOMER CODE'];
+                  const status = String(cleanRow['STATUS'] || '').toLowerCase();
+                  
+                  if (customerCode && (status === 'active/approved' || status === 'active' || status === 'approved')) {
+                    const safeId = String(customerCode).replace(/[^a-zA-Z0-9_]/g, '');
+                    const docRef = doc(collection(db, 'customers'), safeId);
+                    batch.set(docRef, cleanRow, { merge: true });
+                  }
                 }
-              }
-              else if (category === 'VD30 Target' || category === 'STT & UBA Target' || category === 'Team & Service Model Reference') {
-                const salesmanCode = cleanRow['salesman_code'];
-                if (salesmanCode) {
-                  const safeId = String(salesmanCode).replace(/[^a-zA-Z0-9_]/g, '');
+                else if (category === 'VD30 Target' || category === 'STT & UBA Target' || category === 'Team & Service Model Reference') {
+                  const salesmanCode = cleanRow['salesman_code'];
+                  if (salesmanCode) {
+                    const safeId = String(salesmanCode).replace(/[^a-zA-Z0-9_]/g, '');
+                    let collName = 'reference_general';
+                    if (category === 'VD30 Target') collName = 'vd30_targets';
+                    if (category === 'STT & UBA Target') collName = 'salesman_targets';
+                    if (category === 'Team & Service Model Reference') collName = 'reference_team_service';
+                    
+                    const docRef = doc(collection(db, collName), safeId);
+                    batch.set(docRef, cleanRow, { merge: true });
+                  }
+                }
+                else {
+                  const safeId = String(cleanRow['code'] || cleanRow['product_code'] || cleanRow['vd30_code'] || Math.random()).replace(/[^a-zA-Z0-9_]/g, '');
                   let collName = 'reference_general';
-                  if (category === 'VD30 Target') collName = 'vd30_targets';
-                  if (category === 'STT & UBA Target') collName = 'salesman_targets';
-                  if (category === 'Team & Service Model Reference') collName = 'reference_team_service';
+                  if (category === 'Item Category Reference') collName = 'reference_categories';
+                  if (category === 'Channel Reference') collName = 'reference_channels';
+                  if (category === 'VD30 Items Reference') collName = 'reference_vd30';
+                  if (category === 'Geo Hierarchy Reference') collName = 'reference_geo';
+                  if (category === 'Customer Class') collName = 'reference_customer_classes';
                   
                   const docRef = doc(collection(db, collName), safeId);
                   batch.set(docRef, cleanRow, { merge: true });
                 }
-              }
-              else {
-                const safeId = String(cleanRow['code'] || cleanRow['product_code'] || cleanRow['vd30_code'] || Math.random()).replace(/[^a-zA-Z0-9_]/g, '');
-                let collName = 'reference_general';
-                if (category === 'Item Category Reference') collName = 'reference_categories';
-                if (category === 'Channel Reference') collName = 'reference_channels';
-                if (category === 'VD30 Items Reference') collName = 'reference_vd30';
-                if (category === 'Geo Hierarchy Reference') collName = 'reference_geo';
-                if (category === 'Customer Class') collName = 'reference_customer_classes';
-                
-                const docRef = doc(collection(db, collName), safeId);
-                batch.set(docRef, cleanRow, { merge: true });
-              }
-            });
+              });
 
-            await batch.commit();
-            setProgress({ step: 'Uploading Raw Data to Firestore...', current: Math.min(i + BATCH_SIZE, json.length), total: json.length });
+              await batch.commit();
+              setProgress({ step: 'Uploading Raw Data to Firestore...', current: Math.min(i + BATCH_SIZE, json.length), total: json.length });
+            }
           }
 
           resolve();

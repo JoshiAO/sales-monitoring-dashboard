@@ -18,6 +18,20 @@ export const useCustomersData = (selectedTeam: string = 'all') => {
         const salesmanId = userData?.salesmanId;
         const team = userData?.team;
 
+        // Fetch COB Date for cache validation
+        const globalDoc = await getDoc(doc(db, 'settings', 'global'));
+        const cobDate = globalDoc.exists() ? globalDoc.data().cobDate : '';
+
+        const cacheKey = `customers_cache_${currentUser.uid}_${selectedTeam}`;
+        const cachedData = localStorage.getItem(cacheKey);
+        const cachedCobDate = localStorage.getItem('customers_cobDate');
+
+        if (cachedData && cachedCobDate === cobDate) {
+          setCustomers(JSON.parse(cachedData));
+          setLoading(false);
+          return;
+        }
+
         const teamSnap = await getDocs(collection(db, 'reference_team_service'));
         let allowedSalesmen = new Set<string>();
 
@@ -80,6 +94,16 @@ export const useCustomersData = (selectedTeam: string = 'all') => {
 
         // Sort alphabetically
         customerList.sort((a, b) => a.name.localeCompare(b.name));
+        
+        // Save to cache
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify(customerList));
+          if (cobDate) {
+            localStorage.setItem('customers_cobDate', cobDate);
+          }
+        } catch (e) {
+          console.warn("Could not save customers to localStorage (might be too large)");
+        }
         
         setCustomers(customerList);
       } catch (err) {
