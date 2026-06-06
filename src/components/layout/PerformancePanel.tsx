@@ -150,8 +150,21 @@ const PerformancePanel: React.FC<{ className?: string }> = ({ className = '' }) 
           else if (idx === 2) borderColor = '#B45309'; // Bronze
 
           return (
-            <div key={salesman.id} className="glass-panel interactive" style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '12px', border: `1px solid ${borderColor}` }}>
-              <div style={{ position: 'relative' }}>
+            <div key={salesman.id} className="glass-panel interactive" style={{ 
+              padding: '16px', display: 'flex', alignItems: 'center', gap: '12px', 
+              border: `1px solid ${borderColor}`,
+              position: 'relative',
+              overflow: 'hidden',
+              background: idx < 3 ? `linear-gradient(135deg, rgba(255,255,255,0.03) 0%, ${borderColor}25 100%)` : undefined
+            }}>
+              {/* Background Medal for top 3 */}
+              {idx < 3 && (
+                <div style={{ position: 'absolute', right: '-10px', top: '50%', transform: 'translateY(-50%)', opacity: 0.25, pointerEvents: 'none' }}>
+                  <Medal size={100} color={borderColor} strokeWidth={1.5} />
+                </div>
+              )}
+              
+              <div style={{ position: 'relative', zIndex: 1 }}>
                 {salesman.photoURL ? (
                   <img src={salesman.photoURL} alt={salesman.name} style={{ width: '56px', height: '56px', borderRadius: '50%', objectFit: 'cover', border: `2px solid ${borderColor}` }} />
                 ) : (
@@ -178,7 +191,7 @@ const PerformancePanel: React.FC<{ className?: string }> = ({ className = '' }) 
                   <span>{idx + 1}</span>
                 </div>
               </div>
-              <div style={{ flex: 1, minWidth: 0, marginLeft: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <div style={{ flex: 1, minWidth: 0, marginLeft: '8px', display: 'flex', flexDirection: 'column', gap: '4px', zIndex: 1 }}>
                 <div style={{ fontSize: '14px', fontWeight: '500', wordWrap: 'break-word', whiteSpace: 'normal', lineHeight: '1.2' }}>
                   {salesman.name}
                 </div>
