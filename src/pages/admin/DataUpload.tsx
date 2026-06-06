@@ -161,7 +161,6 @@ const DataUpload: React.FC = () => {
                 customerMetrics[cNumStr].netValue += netValue;
                 customerMetrics[cNumStr].gsr += gsr;
                 customerMetrics[cNumStr].bsr += bsr;
-                if (customerMetrics[cNumStr].netValue >= 1) customerMetrics[cNumStr].isBuying = true;
               }
               
               m.categories[category] = (m.categories[category] || 0) + netValue;
@@ -216,7 +215,7 @@ const DataUpload: React.FC = () => {
                    c.netValue = metrics.netValue;
                    c.gsr = metrics.gsr;
                    c.bsr = metrics.bsr;
-                   c.isBuying = metrics.isBuying;
+                   c.isBuying = metrics.netValue >= 1;
                 } else {
                    c.volume = 0;
                    c.netValue = 0;
