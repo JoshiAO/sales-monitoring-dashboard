@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../contexts/AuthContext';
+import { get, set } from 'idb-keyval';
 
 interface DashboardData {
   target: number;
@@ -57,13 +58,48 @@ export const useDashboardData = (selectedTeam: string = 'all', forceAllSalesmen:
         const salesmanId = userData?.salesmanId;
         const team = userData?.team;
 
-        const [metricsSnap, sttSnap, vd30Snap, teamSnap, settingsSnap, refVd30Snap, usersSnap] = await Promise.all([
-          getDocs(collection(db, 'dashboard_metrics')),
-          getDocs(collection(db, 'salesman_targets')),
-          getDocs(collection(db, 'vd30_targets')),
-          getDocs(collection(db, 'reference_team_service')),
+        // Fetch COB Date for cache validation
+        const globalDoc = await getDoc(doc(db, 'settings', 'global'));
+        const cobDate = globalDoc.exists() ? globalDoc.data().cobDate : '';
+
+        const cacheKey = 'dashboard_raw_data_v1';
+        const cachedRawData = await get(cacheKey);
+        const cachedCobDate = await get('dashboard_cobDate');
+
+        let metricsData: any[] = [];
+        let sttData: any[] = [];
+        let vd30Data: any[] = [];
+        let teamData: any[] = [];
+        let refVd30Data: any[] = [];
+
+        if (cachedRawData && cachedCobDate === cobDate) {
+          metricsData = cachedRawData.metricsData;
+          sttData = cachedRawData.sttData;
+          vd30Data = cachedRawData.vd30Data;
+          teamData = cachedRawData.teamData;
+          refVd30Data = cachedRawData.refVd30Data;
+        } else {
+          const [metricsSnap, sttSnap, vd30Snap, teamSnap, refVd30Snap] = await Promise.all([
+            getDocs(collection(db, 'dashboard_metrics')),
+            getDocs(collection(db, 'salesman_targets')),
+            getDocs(collection(db, 'vd30_targets')),
+            getDocs(collection(db, 'reference_team_service')),
+            getDocs(collection(db, 'reference_vd30'))
+          ]);
+
+          metricsData = metricsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+          sttData = sttSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+          vd30Data = vd30Snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          teamData = teamSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+          refVd30Data = refVd30Snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+          await set(cacheKey, { metricsData, sttData, vd30Data, teamData, refVd30Data });
+          await set('dashboard_cobDate', cobDate);
+        }
+
+        // Fetch non-cached data (Users and Settings can change independently)
+        const [settingsSnap, usersSnap] = await Promise.all([
           getDoc(doc(db, 'settings', 'performance_panel')),
-          getDocs(collection(db, 'reference_vd30')),
           getDocs(collection(db, 'users'))
         ]);
         
@@ -81,8 +117,7 @@ export const useDashboardData = (selectedTeam: string = 'all', forceAllSalesmen:
         const excludedVd30Salesmen = settingsSnap.exists() ? (settingsSnap.data().excluded_vd30_salesmen || []) : [];
         
         const vd30DescMap: Record<string, string> = {};
-        refVd30Snap.forEach(d => {
-          const v = d.data();
+        refVd30Data.forEach((v: any) => {
           if (v.vd30_code) {
             vd30DescMap[v.vd30_code] = v.vd30_description || '';
           }
@@ -92,20 +127,18 @@ export const useDashboardData = (selectedTeam: string = 'all', forceAllSalesmen:
 
         // Filter based on role
         if (forceAllSalesmen) {
-          teamSnap.forEach(d => {
-            allowedSalesmen.add(String(d.data().salesman_code));
+          teamData.forEach((row: any) => {
+            allowedSalesmen.add(String(row.salesman_code));
           });
         } else if (role === 'salesman' && salesmanId) {
           allowedSalesmen.add(String(salesmanId));
         } else if (role === 'supervisor' && team) {
           const supervisorTeams = team.split(',').map((t: string) => t.trim());
-          teamSnap.forEach(d => {
-            const row = d.data();
+          teamData.forEach((row: any) => {
             if (supervisorTeams.includes(row.team)) allowedSalesmen.add(String(row.salesman_code));
           });
         } else if (role === 'manager' || role === 'admin') {
-          teamSnap.forEach(d => {
-            const row = d.data();
+          teamData.forEach((row: any) => {
             if (selectedTeam === 'all' || row.team === selectedTeam) {
               allowedSalesmen.add(String(row.salesman_code));
             }
@@ -129,9 +162,9 @@ export const useDashboardData = (selectedTeam: string = 'all', forceAllSalesmen:
         const salesmenData: Record<string, any> = {};
 
         // Aggregate Metrics
-        metricsSnap.forEach(d => {
-          if (!allowedSalesmen.has(d.id)) return;
-          const m = d.data();
+        metricsData.forEach((m: any) => {
+          if (!allowedSalesmen.has(m.id)) return;
+
           totalMtdSales += (m.mtd_net_value || 0);
           totalMtdVolume += (m.mtd_volume || 0);
           totalGsr += (m.gsr || 0);
@@ -168,9 +201,9 @@ export const useDashboardData = (selectedTeam: string = 'all', forceAllSalesmen:
           const geoSource = role === 'salesman' ? m.brgy : m.town;
           if (geoSource) Object.keys(geoSource).forEach(k => geoMap[k] = (geoMap[k] || 0) + geoSource[k]);
 
-          salesmenData[d.id] = {
-            id: d.id,
-            name: userNames[d.id] || m.salesman_name || d.id,
+          salesmenData[m.id] = {
+            id: m.id,
+            name: userNames[m.id] || m.salesman_name || m.id,
             mtdSales: m.mtd_net_value || 0,
             uba: accurateUba,
             target: 0,
@@ -179,28 +212,26 @@ export const useDashboardData = (selectedTeam: string = 'all', forceAllSalesmen:
             vd30TargetMap: {},
             vd30: 0,
             vd30Target: 0,
-            photoURL: userAvatars[d.id] || ''
+            photoURL: userAvatars[m.id] || ''
           };
         });
 
         // Aggregate Targets
-        sttSnap.forEach(d => {
-          if (!allowedSalesmen.has(d.id)) return;
-          const t = d.data();
+        sttData.forEach((t: any) => {
+          if (!allowedSalesmen.has(t.id)) return;
           const target = parseFloat(t.stt_target) || 0;
           const ubaTgt = parseFloat(t['uba target']) || 0;
           totalTarget += target;
           totalUbaTarget += ubaTgt;
           
-          if (salesmenData[d.id]) {
-            salesmenData[d.id].target = target;
-            salesmenData[d.id].ubaTarget = ubaTgt;
+          if (salesmenData[t.id]) {
+            salesmenData[t.id].target = target;
+            salesmenData[t.id].ubaTarget = ubaTgt;
           }
         });
 
-        vd30Snap.forEach(d => {
-          if (!allowedSalesmen.has(d.id)) return;
-          const t = d.data();
+        vd30Data.forEach((t: any) => {
+          if (!allowedSalesmen.has(t.id)) return;
           let salesmanVd30TargetMap: Record<string, number> = {};
           Object.keys(t).forEach(k => {
             if (k.startsWith('F')) {
@@ -209,8 +240,8 @@ export const useDashboardData = (selectedTeam: string = 'all', forceAllSalesmen:
               salesmanVd30TargetMap[k] = val;
             }
           });
-          if (salesmenData[d.id]) {
-            salesmenData[d.id].vd30TargetMap = salesmanVd30TargetMap;
+          if (salesmenData[t.id]) {
+            salesmenData[t.id].vd30TargetMap = salesmanVd30TargetMap;
           }
         });
         
