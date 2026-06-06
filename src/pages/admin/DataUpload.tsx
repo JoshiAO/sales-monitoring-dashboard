@@ -246,17 +246,28 @@ const DataUpload: React.FC = () => {
                 finalVd30[bucket] = m.vd30_placements[bucket].size;
               });
 
-              // Calculate Frequency F1-F4
+              // Calculate Frequency F1-F4 and final UBA
               let f1 = 0, f2 = 0, f3 = 0, f4 = 0;
+              let finalUba = 0;
+
               Object.keys(m.customer_weekly_net).forEach(custId => {
-                let activeWeeks = 0;
-                Object.values(m.customer_weekly_net[custId]).forEach((weekNet: any) => {
-                  if (weekNet >= 1) activeWeeks++;
-                });
-                if (activeWeeks === 1) f1++;
-                else if (activeWeeks === 2) f2++;
-                else if (activeWeeks === 3) f3++;
-                else if (activeWeeks >= 4) f4++;
+                const cMet = customerMetrics[custId];
+                // Only count as UBA and Frequency if their total month netValue >= 1
+                if (cMet && cMet.netValue >= 1) {
+                  finalUba++;
+                  let activeWeeks = 0;
+                  Object.values(m.customer_weekly_net[custId]).forEach((weekNet: any) => {
+                    if (weekNet > 0) activeWeeks++;
+                  });
+                  
+                  // Ensure they fall into at least F1 if they are UBA
+                  if (activeWeeks === 0) activeWeeks = 1;
+
+                  if (activeWeeks === 1) f1++;
+                  else if (activeWeeks === 2) f2++;
+                  else if (activeWeeks === 3) f3++;
+                  else if (activeWeeks >= 4) f4++;
+                }
               });
 
               const docRef = doc(collection(db, 'dashboard_metrics'), salesmanCode);
@@ -267,7 +278,7 @@ const DataUpload: React.FC = () => {
                 mtd_volume: m.mtd_volume,
                 gsr: m.gsr,
                 bsr: m.bsr,
-                uba: m.uba_customers.size,
+                uba: finalUba,
                 vd30_placements: finalVd30,
                 categories: m.categories,
                 channels: m.channels,
