@@ -10,6 +10,7 @@ interface AuthContextType {
   role: UserRole;
   companyCode: string | null;
   name: string | null;
+  photoURL: string | null;
   loading: boolean;
 }
 
@@ -18,6 +19,7 @@ const AuthContext = createContext<AuthContextType>({
   role: null,
   companyCode: null,
   name: null,
+  photoURL: null,
   loading: true,
 });
 
@@ -28,6 +30,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [role, setRole] = useState<UserRole>(null);
   const [companyCode, setCompanyCode] = useState<string | null>(null);
   const [name, setName] = useState<string | null>(null);
+  const [photoURL, setPhotoURL] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -42,22 +45,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setRole((data.role as UserRole) || null);
             setCompanyCode(data.companyCode || null);
             setName(data.name || user.displayName || null);
+            setPhotoURL(data.photoURL || user.photoURL || null);
           } else {
             // Fallback to custom claims
             const tokenResult = await user.getIdTokenResult();
             setRole((tokenResult.claims.role as UserRole) || null);
             setCompanyCode((tokenResult.claims.companyCode as string) || null);
             setName(user.displayName || null);
+            setPhotoURL(user.photoURL || null);
           }
         } catch (error) {
           console.error("Error fetching user data:", error);
           setRole(null);
           setCompanyCode(null);
           setName(null);
+          setPhotoURL(null);
         }
       } else {
         setRole(null);
         setCompanyCode(null);
+        setName(null);
+        setPhotoURL(null);
       }
       setLoading(false);
     });
@@ -66,7 +74,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   return (
-    <AuthContext.Provider value={{ currentUser, role, companyCode, name, loading }}>
+    <AuthContext.Provider value={{ currentUser, role, companyCode, name, photoURL, loading }}>
       {!loading && children}
     </AuthContext.Provider>
   );
