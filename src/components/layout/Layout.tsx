@@ -6,6 +6,7 @@ import { logout } from '../../firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import PerformancePanel from './PerformancePanel';
+import FireEffect from '../ui/FireEffect';
 
 const Layout: React.FC = () => {
   const { role, currentUser, name, photoURL, salesmanId } = useAuth();
@@ -95,13 +96,16 @@ const Layout: React.FC = () => {
           <div style={{ marginBottom: '32px' }}>
             <h2 style={{ color: 'var(--accent-primary)', fontSize: '20px', margin: '0 0 16px 0' }}>Sales Monitoring</h2>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              {photoURL ? (
-                <img src={photoURL} alt="Avatar" className={fireClass} style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--accent-primary)' }} />
-              ) : (
-                <div className={fireClass} style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--accent-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 'bold', fontSize: '18px' }}>
-                  {name ? name.charAt(0).toUpperCase() : 'U'}
-                </div>
-              )}
+              <div style={{ position: 'relative', width: '40px', height: '40px', borderRadius: '50%', flexShrink: 0 }}>
+                <FireEffect type={fireClass} />
+                {photoURL ? (
+                  <img src={photoURL} alt="Avatar" style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--accent-primary)', position: 'relative', zIndex: 1 }} />
+                ) : (
+                  <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--accent-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 'bold', fontSize: '18px', position: 'relative', zIndex: 1 }}>
+                    {name ? name.charAt(0).toUpperCase() : 'U'}
+                  </div>
+                )}
+              </div>
               <div>
                 {name && <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-main)' }}>{name}</div>}
                 <div style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'capitalize' }}>Role: {role || 'Guest'}</div>
@@ -129,13 +133,16 @@ const Layout: React.FC = () => {
         <div style={{ marginBottom: '32px' }}>
           <h2 style={{ color: 'var(--accent-primary)', fontSize: '20px', margin: '0 0 16px 0' }}>Sales Monitoring</h2>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {photoURL ? (
-              <img src={photoURL} alt="Avatar" className={fireClass} style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--accent-primary)' }} />
-            ) : (
-              <div className={fireClass} style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--accent-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 'bold', fontSize: '18px' }}>
-                {name ? name.charAt(0).toUpperCase() : 'U'}
-              </div>
-            )}
+            <div style={{ position: 'relative', width: '40px', height: '40px', borderRadius: '50%', flexShrink: 0 }}>
+              <FireEffect type={fireClass} />
+              {photoURL ? (
+                <img src={photoURL} alt="Avatar" style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--accent-primary)', position: 'relative', zIndex: 1 }} />
+              ) : (
+                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--accent-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 'bold', fontSize: '18px', position: 'relative', zIndex: 1 }}>
+                  {name ? name.charAt(0).toUpperCase() : 'U'}
+                </div>
+              )}
+            </div>
             <div>
               {name && <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-main)' }}>{name}</div>}
               <div style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'capitalize' }}>

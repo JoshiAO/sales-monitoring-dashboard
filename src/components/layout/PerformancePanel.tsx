@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import SalesmanPerformanceModal from './SalesmanPerformanceModal';
+import FireEffect from '../ui/FireEffect';
 
 const PerformancePanel: React.FC<{ className?: string; style?: React.CSSProperties }> = ({ className = '', style }) => {
   const { role } = useAuth();
@@ -198,7 +199,7 @@ const PerformancePanel: React.FC<{ className?: string; style?: React.CSSProperti
           const fireClass = salesman.achievements?.points >= 15 ? 'fire-blue' : salesman.achievements?.points >= 10 ? 'fire-orange' : salesman.achievements?.points >= 5 ? 'fire-red' : '';
 
           return (
-            <div key={salesman.id} className={`glass-panel interactive ${fireClass}`} 
+            <div key={salesman.id} className={`glass-panel interactive`} 
                  onClick={() => setSelectedSalesman(salesman)}
                  style={{ 
               padding: '16px', display: 'flex', alignItems: 'center', gap: '12px', 
@@ -208,6 +209,7 @@ const PerformancePanel: React.FC<{ className?: string; style?: React.CSSProperti
               cursor: 'pointer',
               background: idx < 3 ? `linear-gradient(135deg, rgba(255,255,255,0.03) 0%, ${borderColor}25 100%)` : undefined
             }}>
+              <FireEffect type={fireClass} />
               {/* Background Medal for top 3 */}
               {idx < 3 && (
                 <div style={{ position: 'absolute', right: '-10px', top: '50%', transform: 'translateY(-50%)', opacity: 0.25, pointerEvents: 'none' }}>
