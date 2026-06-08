@@ -32,7 +32,7 @@ const FireEffect: React.FC<FireEffectProps> = ({ type }) => {
 
   // Low Tier (Red) -> Tier1.gif
   if (type === 'fire-red') {
-    return <img src="/animations/Tier1.gif" alt="fire" style={style} />;
+    return <img src="/animations/Tier1.gif" alt="fire" style={{...style, objectPosition: 'right bottom'}} />;
   }
 
   // Mid Tier (Orange) -> Tier2.gif
