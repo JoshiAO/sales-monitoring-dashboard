@@ -7,6 +7,15 @@ interface FireEffectProps {
 const FireEffect: React.FC<FireEffectProps> = ({ type }) => {
   if (!type) return null;
 
+  const getFilter = () => {
+    switch(type) {
+      case 'fire-red': return 'saturate(2) hue-rotate(-20deg)';
+      case 'fire-orange': return 'saturate(1.5)';
+      case 'fire-blue': return 'saturate(1.5) hue-rotate(180deg)';
+      default: return 'none';
+    }
+  };
+
   const style: React.CSSProperties = {
     position: 'absolute',
     bottom: '-20%',
@@ -17,31 +26,23 @@ const FireEffect: React.FC<FireEffectProps> = ({ type }) => {
     pointerEvents: 'none',
     zIndex: 0,
     mixBlendMode: 'screen',
-    opacity: 0.85
+    opacity: 0.85,
+    filter: getFilter()
   };
 
-  // Low Tier
+  // Low Tier (Red) -> Tier1.gif
   if (type === 'fire-red') {
-    return <img src="/animations/Tier3.gif" alt="fire" style={style} />;
+    return <img src="/animations/Tier1.gif" alt="fire" style={style} />;
   }
 
-  // Mid Tier
+  // Mid Tier (Orange) -> Tier2.gif
   if (type === 'fire-orange') {
-    return (
-      <video 
-        src="/animations/Tier2.mp4" 
-        autoPlay 
-        loop 
-        muted 
-        playsInline 
-        style={style} 
-      />
-    );
+    return <img src="/animations/Tier2.gif" alt="fire" style={style} />;
   }
 
-  // High Tier
+  // High Tier (Blue) -> Tier3.gif
   if (type === 'fire-blue') {
-    return <img src="/animations/Tier1.svg" alt="fire" style={style} />;
+    return <img src="/animations/Tier3.gif" alt="fire" style={style} />;
   }
 
   return null;
