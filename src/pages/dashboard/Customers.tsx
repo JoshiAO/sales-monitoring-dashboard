@@ -56,7 +56,7 @@ const Customers: React.FC = () => {
 
   const displayedCustomers = useMemo(() => filteredCustomers.slice(0, displayCount), [filteredCustomers, displayCount]);
 
-  if (loading) {
+  if (loading && customers.length === 0) {
     return (
       <div className="flex-center" style={{ height: '50vh', color: 'var(--accent-primary)' }}>
         <Loader2 size={32} className="animate-spin" />
@@ -169,12 +169,12 @@ const Customers: React.FC = () => {
         </div>
 
         {/* Slicer Group Row */}
-        <div style={{ display: 'flex', width: '100%', borderTop: '1px solid var(--border)', paddingTop: '16px', marginTop: '16px', gap: '16px', overflowX: 'auto', paddingBottom: '8px' }}>
+        <div className="hide-scrollbar" style={{ display: 'flex', width: '100%', borderTop: '1px solid var(--border)', paddingTop: '16px', marginTop: '16px', gap: '16px', overflowX: 'auto', paddingBottom: '8px' }}>
           
           {/* Team Slicer */}
           {(role === 'manager' || role === 'admin') && availableTeams.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', paddingRight: '16px', borderRight: '1px solid rgba(255,255,255,0.05)' }}>
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', paddingRight: '16px', borderRight: '1px solid rgba(255,255,255,0.05)', flexShrink: 0 }}>
+              <div style={{ display: 'flex', gap: '8px' }}>
                 {availableTeams.map(t => (
                   <button
                     key={t}
@@ -200,8 +200,8 @@ const Customers: React.FC = () => {
           )}
 
           {/* Coverage Day Slicer */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', paddingRight: '16px', borderRight: '1px solid rgba(255,255,255,0.05)', backgroundColor: 'rgba(255,255,255,0.01)', padding: '0 8px', borderRadius: '8px' }}>
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', paddingRight: '16px', borderRight: '1px solid rgba(255,255,255,0.05)', backgroundColor: 'rgba(255,255,255,0.01)', padding: '0 8px', borderRadius: '8px', flexShrink: 0 }}>
+            <div style={{ display: 'flex', gap: '8px' }}>
               {availableCoverageDays.map(d => (
                 <button
                   key={d}
@@ -226,8 +226,8 @@ const Customers: React.FC = () => {
           </div>
 
           {/* Wkly Coverage Slicer */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', backgroundColor: 'rgba(255,255,255,0.02)', padding: '0 8px', borderRadius: '8px' }}>
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', backgroundColor: 'rgba(255,255,255,0.02)', padding: '0 8px', borderRadius: '8px', flexShrink: 0 }}>
+            <div style={{ display: 'flex', gap: '8px' }}>
               {availableWklyCoverage.map(w => (
                 <button
                   key={w}
