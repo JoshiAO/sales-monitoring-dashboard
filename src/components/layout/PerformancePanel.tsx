@@ -15,7 +15,7 @@ const PerformancePanel: React.FC<{ className?: string }> = ({ className = '' }) 
   
   const [serviceModelFilter, setServiceModelFilter] = useState<'All' | 'Ex-Truck' | 'Booking'>('All');
   
-  const { loading, data } = useDashboardData('all', viewMode === 'general');
+  const { loading, data } = useDashboardData('all', viewMode === 'general' ? true : 'team');
 
   if (loading) {
     return (

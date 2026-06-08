@@ -24,7 +24,7 @@ interface DashboardData {
   frequency: { f1: number, f2: number, f3: number, f4: number };
 }
 
-export const useDashboardData = (selectedTeam: string = 'all', forceAllSalesmen: boolean = false) => {
+export const useDashboardData = (selectedTeam: string = 'all', forceAllSalesmen: boolean | 'team' = false) => {
   const { currentUser, role } = useAuth();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<DashboardData>({
@@ -143,17 +143,17 @@ export const useDashboardData = (selectedTeam: string = 'all', forceAllSalesmen:
         let allowedSalesmen = new Set<string>();
 
         // Filter based on role
-        if (forceAllSalesmen) {
+        if (forceAllSalesmen === true) {
           teamData.forEach((row: any) => {
             allowedSalesmen.add(String(row.salesman_code));
           });
-        } else if (role === 'salesman' && salesmanId) {
-          allowedSalesmen.add(String(salesmanId));
-        } else if (role === 'supervisor' && team) {
-          const supervisorTeams = team.split(',').map((t: string) => t.trim());
+        } else if (forceAllSalesmen === 'team' || role === 'supervisor') {
+          const supervisorTeams = team ? team.split(',').map((t: string) => t.trim()) : [];
           teamData.forEach((row: any) => {
             if (supervisorTeams.includes(row.team)) allowedSalesmen.add(String(row.salesman_code));
           });
+        } else if (role === 'salesman' && salesmanId) {
+          allowedSalesmen.add(String(salesmanId));
         } else if (role === 'manager' || role === 'admin') {
           teamData.forEach((row: any) => {
             if (selectedTeam === 'all' || row.team === selectedTeam) {
