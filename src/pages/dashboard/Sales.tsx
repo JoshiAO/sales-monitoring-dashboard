@@ -14,7 +14,7 @@ const Sales: React.FC = () => {
   const { loading, data } = useDashboardData(selectedTeam);
   const [selectedSalesmanVd30, setSelectedSalesmanVd30] = useState<any>(null);
 
-  if (loading) {
+  if (loading && data.salesmen.length === 0) {
     return (
       <div className="flex-center" style={{ height: '50vh', color: 'var(--accent-primary)' }}>
         <Loader2 size={32} className="animate-spin" />

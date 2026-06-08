@@ -31,7 +31,7 @@ const VD30: React.FC = () => {
   
   const { loading, data } = useDashboardData(selectedTeam);
 
-  if (loading) {
+  if (loading && data.salesmen.length === 0) {
     return (
       <div className="flex-center" style={{ height: '50vh', color: 'var(--accent-primary)' }}>
         <Loader2 size={32} className="animate-spin" />
