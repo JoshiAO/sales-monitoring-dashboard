@@ -120,11 +120,13 @@ export const useDashboardData = (selectedTeam: string = 'all', forceAllSalesmen:
         
         const userAvatars: Record<string, string> = {};
         const userNames: Record<string, string> = {};
+        const userTypes: Record<string, string> = {};
         usersSnap.forEach(d => {
           const u = d.data();
           if (u.salesmanId) {
             userAvatars[String(u.salesmanId)] = u.photoURL || '';
             if (u.name) userNames[String(u.salesmanId)] = u.name;
+            if (u.salesmanType) userTypes[String(u.salesmanId)] = u.salesmanType;
           }
         });
         
@@ -227,7 +229,8 @@ export const useDashboardData = (selectedTeam: string = 'all', forceAllSalesmen:
             vd30TargetMap: {},
             vd30: 0,
             vd30Target: 0,
-            photoURL: userAvatars[m.id] || ''
+            photoURL: userAvatars[m.id] || '',
+            type: userTypes[m.id] || 'Unknown'
           };
         });
 

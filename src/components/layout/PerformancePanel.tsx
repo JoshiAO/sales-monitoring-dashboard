@@ -13,6 +13,8 @@ const PerformancePanel: React.FC<{ className?: string }> = ({ className = '' }) 
   const [newExclusion, setNewExclusion] = useState('');
   const [newVd30Exclusion, setNewVd30Exclusion] = useState('');
   
+  const [serviceModelFilter, setServiceModelFilter] = useState<'All' | 'Ex-Truck' | 'Booking'>('All');
+  
   const { loading, data } = useDashboardData('all', viewMode === 'general');
 
   if (loading) {
@@ -29,6 +31,8 @@ const PerformancePanel: React.FC<{ className?: string }> = ({ className = '' }) 
   
   const sortedSalesmen = [...data.salesmen]
     .filter(s => {
+      if (serviceModelFilter !== 'All' && s.type !== serviceModelFilter) return false;
+      
       if (activeTab === 'VD30') {
         if (!s.vd30 || s.vd30 <= 0) return false;
         return !excludedVd30Accounts.includes(s.id);
@@ -106,6 +110,29 @@ const PerformancePanel: React.FC<{ className?: string }> = ({ className = '' }) 
           )}
         </div>
       </div>
+      
+      {(role === 'admin' || role === 'manager') && (
+        <div style={{ display: 'flex', background: 'rgba(0,0,0,0.2)', padding: '2px', borderRadius: '12px', marginBottom: '16px', width: 'fit-content' }}>
+          <button 
+            onClick={() => setServiceModelFilter('Ex-Truck')}
+            style={{ padding: '4px 12px', borderRadius: '10px', border: 'none', cursor: 'pointer', background: serviceModelFilter === 'Ex-Truck' ? 'var(--accent-primary)' : 'transparent', color: serviceModelFilter === 'Ex-Truck' ? 'white' : 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}
+          >
+            Ex-Truck
+          </button>
+          <button 
+            onClick={() => setServiceModelFilter('All')}
+            style={{ padding: '4px 12px', borderRadius: '10px', border: 'none', cursor: 'pointer', background: serviceModelFilter === 'All' ? 'var(--accent-primary)' : 'transparent', color: serviceModelFilter === 'All' ? 'white' : 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}
+          >
+            All
+          </button>
+          <button 
+            onClick={() => setServiceModelFilter('Booking')}
+            style={{ padding: '4px 12px', borderRadius: '10px', border: 'none', cursor: 'pointer', background: serviceModelFilter === 'Booking' ? 'var(--accent-primary)' : 'transparent', color: serviceModelFilter === 'Booking' ? 'white' : 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}
+          >
+            Booking
+          </button>
+        </div>
+      )}
       
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '8px', overflowX: 'auto' }}>
