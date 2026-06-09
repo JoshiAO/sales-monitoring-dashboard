@@ -9,6 +9,9 @@ import Sales from './pages/dashboard/Sales';
 import VD30 from './pages/dashboard/VD30';
 import Customers from './pages/dashboard/Customers';
 import MobilePerformancePage from './pages/dashboard/MobilePerformancePage';
+import NpdPromoPacks from './pages/dashboard/NpdPromoPacks';
+import Ageing from './pages/dashboard/Ageing';
+import BackOrder from './pages/dashboard/BackOrder';
 import DataUpload from './pages/admin/DataUpload';
 import Users from './pages/admin/Users';
 
@@ -34,6 +37,9 @@ function AppRoutes() {
         <Route path="sales" element={<Sales />} />
         <Route path="vd30" element={<VD30 />} />
         <Route path="customers" element={<Customers />} />
+        <Route path="npd" element={<NpdPromoPacks />} />
+        <Route path="ageing" element={<Ageing />} />
+        <Route path="bo" element={<BackOrder />} />
         <Route path="data" element={<DataUpload />} />
         <Route path="users" element={<Users />} />
       </Route>

@@ -13,7 +13,11 @@ const uploadCategories = [
   'Channel Reference',
   'VD30 Items Reference',
   'Geo Hierarchy Reference',
-  'Team & Service Model Reference'
+  'Team & Service Model Reference',
+  'NPD & Promo Pack Items',
+  'Ageing Report',
+  'Warehouse B.O.',
+  'Van B.O.'
 ];
 
 interface AggregatedMetrics {
@@ -62,6 +66,8 @@ const parseExcelWithSmartHeaders = (worksheet: XLSX.WorkSheet) => {
 
   return parsed;
 };
+
+const DATE_PICKER_CATEGORIES = ['Net Invoiced', 'Ageing Report', 'Warehouse B.O.', 'Van B.O.'];
 
 const DataUpload: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -431,6 +437,123 @@ const DataUpload: React.FC = () => {
             } catch (err) {
               console.error("Error calculating daily achievements:", err);
             }
+
+            // --- NPD & PROMO PACK AGGREGATION ---
+            setProgress({ step: 'Aggregating NPD & Promo Pack Metrics...', current: 95, total: 100 });
+            try {
+              const npdItemsSnap = await getDocs(collection(db, 'npd_promopack_items'));
+              const npdItemMap: Record<string, { product_description: string; type: string; category: string }> = {};
+              npdItemsSnap.forEach(d => {
+                const r = d.data();
+                const pCode = r.product_code || r['Product Code'] || d.id;
+                if (pCode) {
+                  npdItemMap[String(pCode)] = {
+                    product_description: r.product_description || r['Product Description'] || r.description || r['product description'] || '',
+                    type: r.type || r['Type'] || 'NPD',
+                    category: r.category || r['Category'] || ''
+                  };
+                }
+              });
+
+              if (Object.keys(npdItemMap).length > 0) {
+                // Fetch user names for salesman
+                const usersSnapNpd = await getDocs(collection(db, 'users'));
+                const userNamesNpd: Record<string, string> = {};
+                usersSnapNpd.forEach(d => {
+                  const u = d.data();
+                  if (u.salesmanId && u.name) userNamesNpd[String(u.salesmanId)] = u.name;
+                });
+
+                // Aggregate NPD/Promo per product
+                const npdMetrics: Record<string, { stt: number; uba_customers: Set<string>; salesmen: Record<string, { name: string; stt: number; uba_customers: Set<string>; customersMap: Record<string, { name: string; stt: number; uba: number }> }> }> = {};
+
+                // Pre-populate all items so they appear even with 0 sales
+                Object.keys(npdItemMap).forEach(prodCode => {
+                  npdMetrics[prodCode] = { stt: 0, uba_customers: new Set(), salesmen: {} };
+                });
+
+                json.forEach((row: any) => {
+                  const prodCode = String(row['Product Code'] || '');
+                  if (!npdItemMap[prodCode]) return;
+                  const netValue = parseFloat(row['Net Value']) || 0;
+                  const custNum = row['Sold To Customer number'] ? String(row['Sold To Customer number']).replace(/[^a-zA-Z0-9_]/g, '') : '';
+                  const custName = row['Sold-to Customer Name'] || row['Sold To Customer Name'] || custNum;
+                  const salesmanCode = String(row['Employee Code'] || '');
+                  const salesmanName = row['Employee Name'] || userNamesNpd[salesmanCode] || salesmanCode;
+
+                  if (!npdMetrics[prodCode]) npdMetrics[prodCode] = { stt: 0, uba_customers: new Set(), salesmen: {} };
+                  npdMetrics[prodCode].stt += netValue;
+                  if (netValue >= 1 && custNum) npdMetrics[prodCode].uba_customers.add(custNum);
+
+                  if (salesmanCode) {
+                    if (!npdMetrics[prodCode].salesmen[salesmanCode]) {
+                      npdMetrics[prodCode].salesmen[salesmanCode] = { name: salesmanName, stt: 0, uba_customers: new Set(), customersMap: {} };
+                    }
+                    npdMetrics[prodCode].salesmen[salesmanCode].stt += netValue;
+                    
+                    if (custNum && netValue !== 0) {
+                      if (!npdMetrics[prodCode].salesmen[salesmanCode].customersMap[custNum]) {
+                        npdMetrics[prodCode].salesmen[salesmanCode].customersMap[custNum] = { name: custName, stt: 0, uba: 0 };
+                      }
+                      npdMetrics[prodCode].salesmen[salesmanCode].customersMap[custNum].stt += netValue;
+                    }
+
+                    if (netValue >= 1 && custNum) {
+                      if (!npdMetrics[prodCode].salesmen[salesmanCode].uba_customers.has(custNum)) {
+                        npdMetrics[prodCode].salesmen[salesmanCode].uba_customers.add(custNum);
+                        npdMetrics[prodCode].salesmen[salesmanCode].customersMap[custNum].uba = 1;
+                      }
+                    }
+                  }
+                });
+
+                // Write to Firestore
+                const npdBatch = writeBatch(db);
+                Object.keys(npdMetrics).forEach(prodCode => {
+                  const m = npdMetrics[prodCode];
+                  const info = npdItemMap[prodCode];
+                  const salesmenArr = Object.keys(m.salesmen).map(code => ({
+                    code,
+                    name: m.salesmen[code].name,
+                    stt: m.salesmen[code].stt,
+                    uba: m.salesmen[code].uba_customers.size,
+                    customers: Object.keys(m.salesmen[code].customersMap).map(cCode => ({
+                      code: cCode,
+                      name: m.salesmen[code].customersMap[cCode].name,
+                      stt: m.salesmen[code].customersMap[cCode].stt,
+                      uba: m.salesmen[code].customersMap[cCode].uba
+                    })).filter(c => c.stt > 0 || c.uba > 0)
+                  }));
+                  const safeId = prodCode.replace(/[^a-zA-Z0-9_]/g, '');
+                  npdBatch.set(doc(collection(db, 'npd_promopack_metrics'), safeId), {
+                    product_code: prodCode,
+                    product_description: info.product_description,
+                    type: info.type,
+                    category: info.category,
+                    stt: m.stt,
+                    uba: m.uba_customers.size,
+                    salesmen: salesmenArr,
+                    last_updated: new Date().toISOString()
+                  }, { merge: false });
+                });
+                await npdBatch.commit();
+              }
+            } catch (err) {
+              console.error("Error aggregating NPD/Promo metrics:", err);
+            }
+
+            // --- TRADE BO HISTORY STACKING ---
+            try {
+              let totalBsr = 0;
+              Object.values(metrics).forEach((m: any) => { totalBsr += m.bsr || 0; });
+              const boMonthKey = cobDate.substring(0, 7);
+              await setDoc(doc(db, 'trade_bo_history', boMonthKey), {
+                [`dates.${cobDate.replace(/-/g, '_')}`]: totalBsr,
+                last_updated: new Date().toISOString()
+              }, { merge: true });
+            } catch (err) {
+              console.error("Error saving Trade BO history:", err);
+            }
           } 
           else if (category === 'CML (Customer Master List)') {
             setProgress({ step: 'Aggregating CML Baseline & Chunking...', current: 0, total: 100 });
@@ -479,21 +602,122 @@ const DataUpload: React.FC = () => {
             await cBatch.commit();
           }
 
-          // === RAW DATA UPLOAD ===
-          if (category !== 'Net Invoiced') {
+          // === NPD & PROMO PACK ITEMS UPLOAD ===
+          else if (category === 'NPD & Promo Pack Items') {
+            setProgress({ step: 'Uploading NPD & Promo Pack Items...', current: 0, total: json.length });
+            const BATCH_SIZE = 450;
+            for (let i = 0; i < json.length; i += BATCH_SIZE) {
+              const batch = writeBatch(db);
+              json.slice(i, i + BATCH_SIZE).forEach((row: any) => {
+                // Normalize keys to lowercase with underscores to prevent mismatch
+                const cleanRow: any = {};
+                Object.keys(row).forEach(k => {
+                  cleanRow[k.trim().toLowerCase().replace(/\s+/g, '_')] = row[k];
+                  // Keep original too just in case
+                  cleanRow[k] = row[k]; 
+                });
+                const prodCode = String(cleanRow['product_code'] || cleanRow['Product Code'] || '').replace(/[^a-zA-Z0-9_]/g, '');
+                if (prodCode) {
+                  batch.set(doc(collection(db, 'npd_promopack_items'), prodCode), cleanRow, { merge: false });
+                }
+              });
+              await batch.commit();
+              setProgress({ step: 'Uploading NPD & Promo Pack Items...', current: Math.min(i + BATCH_SIZE, json.length), total: json.length });
+            }
+            await setDoc(doc(db, 'settings', 'global'), { lastReferenceUpload: Date.now() }, { merge: true });
+          }
+
+          // === AGEING REPORT UPLOAD ===
+          else if (category === 'Ageing Report') {
+            setProgress({ step: 'Clearing old Ageing data...', current: 0, total: 100 });
+            // Clear existing ageing_data docs
+            const oldAgeingSnap = await getDocs(collection(db, 'ageing_data'));
+            const clearBatch = writeBatch(db);
+            oldAgeingSnap.forEach(d => clearBatch.delete(d.ref));
+            await clearBatch.commit();
+
+            // Write new data in chunks of 200 rows per doc
+            const CHUNK_SIZE = 200;
+            for (let i = 0; i < json.length; i += CHUNK_SIZE) {
+              const chunk = json.slice(i, i + CHUNK_SIZE).map((r: any) => JSON.parse(JSON.stringify(r)));
+              const chunkIndex = Math.floor(i / CHUNK_SIZE);
+              await setDoc(doc(collection(db, 'ageing_data'), `chunk_${chunkIndex}`), { rows: JSON.stringify(chunk) });
+              setProgress({ step: 'Uploading Ageing data...', current: Math.min(i + CHUNK_SIZE, json.length), total: json.length });
+            }
+            await setDoc(doc(db, 'settings', 'global'), { ageingReportDate: cobDate, lastAgeingUpload: Date.now() }, { merge: true });
+          }
+
+          // === WAREHOUSE BO UPLOAD ===
+          else if (category === 'Warehouse B.O.') {
+            setProgress({ step: 'Clearing old Warehouse B.O. data...', current: 0, total: 100 });
+            const oldWSnap = await getDocs(collection(db, 'warehouse_bo_data'));
+            const wClearBatch = writeBatch(db);
+            oldWSnap.forEach(d => wClearBatch.delete(d.ref));
+            await wClearBatch.commit();
+
+            const BATCH_SIZE = 450;
+            let totalQty = 0;
+            for (let i = 0; i < json.length; i += BATCH_SIZE) {
+              const batch = writeBatch(db);
+              json.slice(i, i + BATCH_SIZE).forEach((row: any, idx: number) => {
+                const cleanRow = JSON.parse(JSON.stringify(row));
+                totalQty += parseFloat(cleanRow['qty'] || cleanRow['Qty'] || 0);
+                const docRef = doc(collection(db, 'warehouse_bo_data'), `row_${i + idx}`);
+                batch.set(docRef, cleanRow);
+              });
+              await batch.commit();
+              setProgress({ step: 'Uploading Warehouse B.O. data...', current: Math.min(i + BATCH_SIZE, json.length), total: json.length });
+            }
+            // Stack history
+            const wMonthKey = cobDate.substring(0, 7);
+            await setDoc(doc(db, 'warehouse_bo_history', wMonthKey), {
+              [`dates.${cobDate.replace(/-/g, '_')}`]: totalQty,
+              last_updated: new Date().toISOString()
+            }, { merge: true });
+            await setDoc(doc(db, 'settings', 'global'), { lastWarehouseBoUpload: Date.now() }, { merge: true });
+          }
+
+          // === VAN BO UPLOAD ===
+          else if (category === 'Van B.O.') {
+            setProgress({ step: 'Clearing old Van B.O. data...', current: 0, total: 100 });
+            const oldVSnap = await getDocs(collection(db, 'van_bo_data'));
+            const vClearBatch = writeBatch(db);
+            oldVSnap.forEach(d => vClearBatch.delete(d.ref));
+            await vClearBatch.commit();
+
+            const BATCH_SIZE = 450;
+            let totalQtyVan = 0;
+            for (let i = 0; i < json.length; i += BATCH_SIZE) {
+              const batch = writeBatch(db);
+              json.slice(i, i + BATCH_SIZE).forEach((row: any, idx: number) => {
+                const cleanRow = JSON.parse(JSON.stringify(row));
+                totalQtyVan += parseFloat(cleanRow['qty'] || cleanRow['Qty'] || 0);
+                const docRef = doc(collection(db, 'van_bo_data'), `row_${i + idx}`);
+                batch.set(docRef, cleanRow);
+              });
+              await batch.commit();
+              setProgress({ step: 'Uploading Van B.O. data...', current: Math.min(i + BATCH_SIZE, json.length), total: json.length });
+            }
+            // Stack history
+            const vMonthKey = cobDate.substring(0, 7);
+            await setDoc(doc(db, 'van_bo_history', vMonthKey), {
+              [`dates.${cobDate.replace(/-/g, '_')}`]: totalQtyVan,
+              last_updated: new Date().toISOString()
+            }, { merge: true });
+            await setDoc(doc(db, 'settings', 'global'), { lastVanBoUpload: Date.now() }, { merge: true });
+          }
+
+          // === RAW DATA UPLOAD (legacy reference types) ===
+          else if (!['Net Invoiced', 'CML (Customer Master List)'].includes(category)) {
             const BATCH_SIZE = 450;
             for (let i = 0; i < json.length; i += BATCH_SIZE) {
               const batch = writeBatch(db);
               const chunk = json.slice(i, i + BATCH_SIZE);
 
               chunk.forEach((row: any) => {
-                // Firebase rejects undefined values. JSON stringify strictly drops them.
                 const cleanRow = JSON.parse(JSON.stringify(row));
 
-                if (category === 'CML (Customer Master List)') {
-                  // Customer chunks are handled entirely in the aggregation block above
-                }
-                else if (category === 'VD30 Target' || category === 'STT & UBA Target' || category === 'Team & Service Model Reference') {
+                if (category === 'VD30 Target' || category === 'STT & UBA Target' || category === 'Team & Service Model Reference') {
                   const salesmanCode = cleanRow['salesman_code'];
                   if (salesmanCode) {
                     const safeId = String(salesmanCode).replace(/[^a-zA-Z0-9_]/g, '');
@@ -501,12 +725,9 @@ const DataUpload: React.FC = () => {
                     if (category === 'VD30 Target') collName = 'vd30_targets';
                     if (category === 'STT & UBA Target') collName = 'salesman_targets';
                     if (category === 'Team & Service Model Reference') collName = 'reference_team_service';
-                    
-                    const docRef = doc(collection(db, collName), safeId);
-                    batch.set(docRef, cleanRow, { merge: true });
+                    batch.set(doc(collection(db, collName), safeId), cleanRow, { merge: true });
                   }
-                }
-                else {
+                } else {
                   const safeId = String(cleanRow['code'] || cleanRow['product_code'] || cleanRow['vd30_code'] || Math.random()).replace(/[^a-zA-Z0-9_]/g, '');
                   let collName = 'reference_general';
                   if (category === 'Item Category Reference') collName = 'reference_categories';
@@ -514,17 +735,13 @@ const DataUpload: React.FC = () => {
                   if (category === 'VD30 Items Reference') collName = 'reference_vd30';
                   if (category === 'Geo Hierarchy Reference') collName = 'reference_geo';
                   if (category === 'Customer Class') collName = 'reference_customer_classes';
-                  
-                  const docRef = doc(collection(db, collName), safeId);
-                  batch.set(docRef, cleanRow, { merge: true });
+                  batch.set(doc(collection(db, collName), safeId), cleanRow, { merge: true });
                 }
               });
 
               await batch.commit();
               setProgress({ step: 'Uploading Raw Data to Firestore...', current: Math.min(i + BATCH_SIZE, json.length), total: json.length });
             }
-
-            // Save reference update timestamp globally (CML and all other references)
             await setDoc(doc(db, 'settings', 'global'), { lastReferenceUpload: Date.now() }, { merge: true });
           }
 
@@ -622,9 +839,11 @@ const DataUpload: React.FC = () => {
               />
             </div>
 
-            {activeCategory === 'Net Invoiced' && (
+            {DATE_PICKER_CATEGORIES.includes(activeCategory) && (
               <div style={{ marginBottom: '24px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: 'var(--text-muted)' }}>COB Date (Closing of Business)</label>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: 'var(--text-muted)' }}>
+                  {activeCategory === 'Net Invoiced' ? 'COB Date (Closing of Business)' : 'Report / Upload Date'}
+                </label>
                 <input 
                   type="date" 
                   value={cobDate}

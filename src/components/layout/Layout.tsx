@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { LayoutDashboard, ShoppingCart, Target, Users, Database, Settings, LogOut, Menu, BarChart2 } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Target, Users, Database, Settings, LogOut, Menu, BarChart2, Package, Clock, AlertTriangle } from 'lucide-react';
 import { logout } from '../../firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase/config';
@@ -47,19 +47,17 @@ const Layout: React.FC = () => {
           <Users size={18} /> Customers
         </NavLink>
 
-        {/* Under Development Tabs */}
-        <div className="btn" style={{ justifyContent: 'flex-start', color: 'rgba(255,255,255,0.2)', cursor: 'not-allowed' }} title="Under Development">
-          <Target size={18} /> NPD
-        </div>
-        <div className="btn" style={{ justifyContent: 'flex-start', color: 'rgba(255,255,255,0.2)', cursor: 'not-allowed' }} title="Under Development">
-          <Target size={18} /> Promo Packs
-        </div>
-        <div className="btn" style={{ justifyContent: 'flex-start', color: 'rgba(255,255,255,0.2)', cursor: 'not-allowed' }} title="Under Development">
-          <Target size={18} /> Ageing
-        </div>
-        <div className="btn" style={{ justifyContent: 'flex-start', color: 'rgba(255,255,255,0.2)', cursor: 'not-allowed' }} title="Under Development">
-          <Target size={18} /> B.O.
-        </div>
+        <NavLink onClick={() => setIsMobileMenuOpen(false)} to="/npd" className="btn" style={({isActive}) => ({ justifyContent: 'flex-start', backgroundColor: isActive ? 'var(--bg-panel-hover)' : 'transparent', color: isActive ? 'var(--accent-primary)' : 'var(--text-main)' })}>
+          <Package size={18} /> NPD & Promo
+        </NavLink>
+        {role !== 'salesman' && (
+          <NavLink onClick={() => setIsMobileMenuOpen(false)} to="/ageing" className="btn" style={({isActive}) => ({ justifyContent: 'flex-start', backgroundColor: isActive ? 'var(--bg-panel-hover)' : 'transparent', color: isActive ? 'var(--accent-primary)' : 'var(--text-main)' })}>
+            <Clock size={18} /> Ageing
+          </NavLink>
+        )}
+        <NavLink onClick={() => setIsMobileMenuOpen(false)} to="/bo" className="btn" style={({isActive}) => ({ justifyContent: 'flex-start', backgroundColor: isActive ? 'var(--bg-panel-hover)' : 'transparent', color: isActive ? 'var(--accent-primary)' : 'var(--text-main)' })}>
+          <AlertTriangle size={18} /> B.O.
+        </NavLink>
       </div>
       
       {role === 'admin' && (

@@ -1,0 +1,244 @@
+import React, { useState, useMemo } from 'react';
+import { Search, Loader2, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { useAgeingData, type AgeingRow } from '../../hooks/useAgeingData';
+
+type SortKey = keyof AgeingRow | '';
+type SortDir = 'asc' | 'desc' | 'none';
+
+const COLUMNS: Array<{ key: keyof AgeingRow; label: string; align?: 'right' }> = [
+  { key: 'branch', label: 'Branch' },
+  { key: 'category', label: 'Category' },
+  { key: 'item_code', label: 'Item Code' },
+  { key: 'item_description', label: 'Description' },
+  { key: 'ads', label: 'ADS', align: 'right' },
+  { key: 'production_date', label: 'Prod. Date' },
+  { key: 'expiry_date', label: 'Expiry Date' },
+  { key: 'qty', label: 'Qty', align: 'right' },
+  { key: 'uom', label: 'UOM' },
+  { key: 'days_to_go', label: 'Days to Go', align: 'right' },
+  { key: 'idl', label: 'IDL' }
+];
+
+const PAGE_SIZE = 50;
+
+const Ageing: React.FC = () => {
+  const { loading, rows, reportDate } = useAgeingData();
+  const [search, setSearch] = useState('');
+  const [branchFilter, setBranchFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [sortKey, setSortKey] = useState<SortKey>('');
+  const [sortDir, setSortDir] = useState<SortDir>('none');
+  const [page, setPage] = useState(1);
+
+  const branches = useMemo(() =>
+    Array.from(new Set(rows.map(r => r.branch).filter(Boolean))).sort(), [rows]);
+  const categories = useMemo(() =>
+    Array.from(new Set(rows.map(r => r.category).filter(Boolean))).sort(), [rows]);
+
+  const filtered = useMemo(() => {
+    let result = rows.filter(r => {
+      const matchSearch =
+        r.item_code?.toLowerCase().includes(search.toLowerCase()) ||
+        r.item_description?.toLowerCase().includes(search.toLowerCase());
+      const matchBranch = branchFilter === 'all' || r.branch === branchFilter;
+      const matchCategory = categoryFilter === 'all' || r.category === categoryFilter;
+      return matchSearch && matchBranch && matchCategory;
+    });
+
+    if (sortKey && sortDir !== 'none') {
+      result = [...result].sort((a, b) => {
+        const av = a[sortKey as keyof AgeingRow];
+        const bv = b[sortKey as keyof AgeingRow];
+        let cmp = 0;
+        if (typeof av === 'number' && typeof bv === 'number') cmp = av - bv;
+        else cmp = String(av || '').localeCompare(String(bv || ''));
+        return sortDir === 'asc' ? cmp : -cmp;
+      });
+    }
+    return result;
+  }, [rows, search, branchFilter, categoryFilter, sortKey, sortDir]);
+
+  const paged = useMemo(() => filtered.slice(0, page * PAGE_SIZE), [filtered, page]);
+
+  const handleSort = (key: keyof AgeingRow) => {
+    if (sortKey !== key) { setSortKey(key); setSortDir('asc'); }
+    else if (sortDir === 'asc') setSortDir('desc');
+    else if (sortDir === 'desc') { setSortKey(''); setSortDir('none'); }
+  };
+
+  const SortIcon: React.FC<{ col: keyof AgeingRow }> = ({ col }) => {
+    if (sortKey !== col) return <ChevronsUpDown size={12} style={{ marginLeft: '4px', opacity: 0.3 }} />;
+    return sortDir === 'asc'
+      ? <ChevronUp size={12} style={{ marginLeft: '4px', color: 'var(--accent-primary)' }} />
+      : <ChevronDown size={12} style={{ marginLeft: '4px', color: 'var(--accent-primary)' }} />;
+  };
+
+  const SlicerRow: React.FC<{ options: string[], selected: string, onSelect: (val: string) => void, label: string }> = ({ options, selected, onSelect, label }) => (
+    <div className="hide-scrollbar" style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '8px', width: '100%', alignItems: 'center' }}>
+      <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 600, whiteSpace: 'nowrap', marginRight: '4px' }}>
+        {label}:
+      </span>
+      {selected !== 'all' && (
+        <>
+          <button
+            onClick={() => onSelect('all')}
+            style={{
+              padding: '6px 14px', borderRadius: '16px', border: 'none', whiteSpace: 'nowrap',
+              backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--accent-danger)',
+              fontSize: '12px', cursor: 'pointer', flexShrink: 0
+            }}
+          >
+            Clear
+          </button>
+          <div style={{ width: '1px', backgroundColor: 'var(--border)', margin: '0 4px', flexShrink: 0, height: '24px' }} />
+        </>
+      )}
+      {options.map(o => (
+        <button
+          key={o}
+          onClick={() => onSelect(o)}
+          style={{
+            padding: '6px 14px', borderRadius: '16px', border: '1px solid', whiteSpace: 'nowrap',
+            borderColor: selected === o ? 'var(--accent-primary)' : 'var(--border)',
+            backgroundColor: selected === o ? 'var(--accent-primary)' : 'rgba(0,0,0,0.2)',
+            color: selected === o ? '#fff' : 'var(--text-muted)',
+            fontSize: '12px', cursor: 'pointer', transition: 'all 0.2s', flexShrink: 0
+          }}
+        >
+          {o}
+        </button>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="animate-fade-in">
+      {/* Header */}
+      <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
+        <div>
+          <h2>Ageing Report</h2>
+          {reportDate && (
+            <p style={{ marginTop: '6px', fontSize: '14px', color: 'var(--text-muted)' }}>
+              Report Date:{' '}
+              <span style={{ color: 'var(--accent-primary)', fontWeight: 600 }}>{reportDate}</span>
+            </p>
+          )}
+        </div>
+        <div style={{ fontSize: '13px', color: 'var(--text-muted)', padding: '6px 12px', background: 'rgba(0,0,0,0.2)', borderRadius: '16px', border: '1px solid var(--border)' }}>
+          Showing <strong style={{ color: 'var(--text-main)' }}>{filtered.length.toLocaleString()}</strong> rows
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
+        <div style={{ position: 'relative', width: '100%', maxWidth: '400px' }}>
+          <Search size={15} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+          <input
+            type="text"
+            placeholder="Search by item code or description..."
+            value={search}
+            onChange={e => { setSearch(e.target.value); setPage(1); }}
+            style={{
+              width: '100%', padding: '10px 12px 10px 36px', boxSizing: 'border-box',
+              background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border)',
+              borderRadius: '8px', color: 'white', fontSize: '14px'
+            }}
+          />
+        </div>
+        
+        {branches.length > 0 && (
+          <SlicerRow options={branches} selected={branchFilter} onSelect={v => { setBranchFilter(v); setPage(1); }} label="Branches" />
+        )}
+        {categories.length > 0 && (
+          <SlicerRow options={categories} selected={categoryFilter} onSelect={v => { setCategoryFilter(v); setPage(1); }} label="Categories" />
+        )}
+      </div>
+
+      {/* Table */}
+      {loading ? (
+        <div className="flex-center" style={{ height: '40vh', color: 'var(--accent-primary)' }}>
+          <Loader2 size={32} className="animate-spin" />
+        </div>
+      ) : (
+        <div className="glass-panel" style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border)', background: 'rgba(0,0,0,0.3)' }}>
+                  {COLUMNS.map(col => (
+                    <th
+                      key={col.key}
+                      onClick={() => handleSort(col.key)}
+                      style={{
+                        padding: '12px 14px',
+                        textAlign: col.align || 'left',
+                        color: sortKey === col.key ? 'var(--accent-primary)' : 'var(--text-muted)',
+                        fontWeight: 600, cursor: 'pointer', userSelect: 'none',
+                        whiteSpace: 'nowrap', position: 'sticky', top: 0,
+                        background: 'rgba(15, 23, 42, 0.95)'
+                      }}
+                    >
+                      <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                        {col.label}<SortIcon col={col.key} />
+                      </span>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {paged.map((row, idx) => (
+                  <tr
+                    key={idx}
+                    style={{
+                      borderBottom: '1px solid rgba(255,255,255,0.04)',
+                      backgroundColor: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)',
+                      transition: 'background 0.15s'
+                    }}
+                  >
+                    <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>{row.branch}</td>
+                    <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>{row.category}</td>
+                    <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontSize: '12px' }}>{row.item_code}</td>
+                    <td style={{ padding: '10px 14px', maxWidth: '220px' }}>{row.item_description}</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right' }}>{row.ads.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>{row.production_date}</td>
+                    <td style={{ padding: '10px 14px', whiteSpace: 'nowrap', color: row.days_to_go <= 30 ? 'var(--accent-danger)' : row.days_to_go <= 60 ? '#fb923c' : 'inherit' }}>
+                      {row.expiry_date}
+                    </td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600 }}>{row.qty.toLocaleString()}</td>
+                    <td style={{ padding: '10px 14px' }}>{row.uom}</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, color: row.days_to_go <= 0 ? 'var(--accent-danger)' : row.days_to_go <= 30 ? '#fb923c' : 'var(--accent-success)' }}>
+                      {row.days_to_go}
+                    </td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right' }}>
+                      {typeof row.idl === 'number' ? row.idl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : !isNaN(parseFloat(String(row.idl))) ? parseFloat(String(row.idl)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : row.idl}
+                    </td>
+                  </tr>
+                ))}
+                {paged.length === 0 && (
+                  <tr><td colSpan={11} style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                    No data found. Upload an Ageing Report in the Data page.
+                  </td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Load more */}
+          {paged.length < filtered.length && (
+            <div style={{ padding: '16px', textAlign: 'center', borderTop: '1px solid var(--border)' }}>
+              <button
+                onClick={() => setPage(p => p + 1)}
+                className="btn"
+                style={{ padding: '8px 24px', border: '1px solid var(--border)', background: 'rgba(0,0,0,0.2)' }}
+              >
+                Load More ({filtered.length - paged.length} remaining)
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default Ageing;

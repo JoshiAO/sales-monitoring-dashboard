@@ -4,7 +4,7 @@ import { useTeams } from '../../hooks/useTeams';
 import { Modal } from '../../components/ui/Modal';
 import { UserPlus, Edit2, Trash2, Mail, Camera, Loader2 } from 'lucide-react';
 import { db, storage, firebaseConfig } from '../../firebase/config';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
@@ -209,7 +209,6 @@ const Users: React.FC = () => {
     if (confirm('Are you sure you want to fix missing roles? This will assign the "salesman" role to any user who has no role in the database.')) {
       setIsSubmitting(true);
       try {
-        const { getDocs } = await import('firebase/firestore');
         const snapshot = await getDocs(collection(db, 'users'));
         let count = 0;
         const updates: Promise<void>[] = [];
