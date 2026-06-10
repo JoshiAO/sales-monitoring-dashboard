@@ -3,12 +3,13 @@ import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
-import { Search, Loader2, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { Search, Loader2, ChevronUp, ChevronDown, ChevronsUpDown, Calendar } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTeams } from '../../hooks/useTeams';
 import { useTradeBoData, useTradeBoCustomers } from '../../hooks/useTradeBoData';
 import { useWarehouseBoData } from '../../hooks/useWarehouseBoData';
 import { useVanBoData } from '../../hooks/useVanBoData';
+import { usePricelist } from '../../hooks/usePricelist';
 import { Modal } from '../../components/ui/Modal';
 
 const PIE_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
@@ -72,7 +73,7 @@ const SortableTable: React.FC<SortableTableProps> = ({ columns, rows, emptyMsg }
             <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
               {columns.map(col => (
                 <td key={col.key} style={{ padding: '9px 12px', textAlign: col.align || 'left', whiteSpace: col.align === 'right' ? 'nowrap' : undefined }}>
-                  {row[col.key] ?? '-'}
+                  {col.key === 'amount' ? formatCurrency(row[col.key] || 0) : (row[col.key] ?? '-')}
                 </td>
               ))}
             </tr>
@@ -129,9 +130,10 @@ const BackOrder: React.FC = () => {
 
   const canSeeAdminTabs = role === 'admin' || role === 'manager' || role === 'supervisor';
 
+  const { loading: priceLoading, priceMap } = usePricelist();
   const { loading: tradeLoading, salesmen, history: tradeHistory, totalBsr } = useTradeBoData(selectedTeam);
-  const { loading: whLoading, items: whItems, history: whHistory, categories: whCats, branches: whBranches, totalQty: whTotal } = useWarehouseBoData();
-  const { loading: vanLoading, items: vanItems, history: vanHistory, categories: vanCats, vans, totalQty: vanTotal } = useVanBoData();
+  const { loading: whLoading, items: whItems, categories: whCats, branches: whBranches, totalAmount: whTotalAmount, uploadDate: whUploadDate } = useWarehouseBoData(priceMap);
+  const { loading: vanLoading, items: vanItems, categories: vanCats, vans, totalAmount: vanTotalAmount, uploadDate: vanUploadDate } = useVanBoData(priceMap);
   const { loading: custLoading, customers } = useTradeBoCustomers(selectedSalesman?.code || null);
 
   // ─── Warehouse derived data ─────────────────────────────────────────────
@@ -143,13 +145,13 @@ const BackOrder: React.FC = () => {
 
   const whCategoryChart = useMemo(() => {
     const m: Record<string, number> = {};
-    filteredWh.forEach(i => { m[i.category] = (m[i.category] || 0) + i.qty; });
+    filteredWh.forEach(i => { m[i.category] = (m[i.category] || 0) + i.amount; });
     return Object.entries(m).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 10);
   }, [filteredWh]);
 
   const whBranchChart = useMemo(() => {
     const m: Record<string, number> = {};
-    filteredWh.forEach(i => { m[i.branch_name] = (m[i.branch_name] || 0) + i.qty; });
+    filteredWh.forEach(i => { m[i.branch_name] = (m[i.branch_name] || 0) + i.amount; });
     return Object.entries(m).map(([name, value]) => ({ name, value }));
   }, [filteredWh]);
 
@@ -162,13 +164,13 @@ const BackOrder: React.FC = () => {
 
   const vanCategoryChart = useMemo(() => {
     const m: Record<string, number> = {};
-    filteredVan.forEach(i => { m[i.category] = (m[i.category] || 0) + i.qty; });
+    filteredVan.forEach(i => { m[i.category] = (m[i.category] || 0) + i.amount; });
     return Object.entries(m).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 10);
   }, [filteredVan]);
 
   const vanShareChart = useMemo(() => {
     const m: Record<string, number> = {};
-    vanItems.forEach(i => { m[i.van_code] = (m[i.van_code] || 0) + i.qty; });
+    vanItems.forEach(i => { m[i.van_code] = (m[i.van_code] || 0) + i.amount; });
     return Object.entries(m).map(([name, value]) => ({ name, value }));
   }, [vanItems]);
 
@@ -197,6 +199,8 @@ const BackOrder: React.FC = () => {
     contentStyle: { background: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#f8fafc' },
     labelStyle: { color: '#94a3b8' }
   };
+
+
 
   return (
     <div className="animate-fade-in">
@@ -250,12 +254,28 @@ const BackOrder: React.FC = () => {
         {canSeeAdminTabs && (
           <>
             <div className="glass-panel" style={{ flex: 1, minWidth: '220px', padding: '20px' }}>
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>Warehouse B.O.</div>
-              <div style={{ fontSize: '24px', fontWeight: 700, color: '#f59e0b' }}>{whTotal.toLocaleString()} units</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Warehouse B.O.</div>
+                {whUploadDate && (
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '12px', background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)' }}>
+                    <Calendar size={10} style={{ color: '#f59e0b' }} />
+                    <span style={{ fontSize: '10px', color: '#f59e0b', fontWeight: 600 }}>{whUploadDate}</span>
+                  </div>
+                )}
+              </div>
+              <div style={{ fontSize: '24px', fontWeight: 700, color: '#f59e0b' }}>{formatCurrency(whTotalAmount)}</div>
             </div>
             <div className="glass-panel" style={{ flex: 1, minWidth: '220px', padding: '20px' }}>
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>Van B.O.</div>
-              <div style={{ fontSize: '24px', fontWeight: 700, color: '#8b5cf6' }}>{vanTotal.toLocaleString()} units</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Van B.O.</div>
+                {vanUploadDate && (
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', borderRadius: '12px', background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)' }}>
+                    <Calendar size={10} style={{ color: '#8b5cf6' }} />
+                    <span style={{ fontSize: '10px', color: '#8b5cf6', fontWeight: 600 }}>{vanUploadDate}</span>
+                  </div>
+                )}
+              </div>
+              <div style={{ fontSize: '24px', fontWeight: 700, color: '#8b5cf6' }}>{formatCurrency(vanTotalAmount)}</div>
             </div>
           </>
         )}
@@ -318,28 +338,10 @@ const BackOrder: React.FC = () => {
 
       {/* ═══ WAREHOUSE TAB ═══════════════════════════════════════════════════ */}
       {activeTab === 'warehouse' && canSeeAdminTabs && (
-        whLoading ? (
+        (whLoading || priceLoading) ? (
           <div className="flex-center" style={{ height: '30vh', color: 'var(--accent-primary)' }}><Loader2 size={32} className="animate-spin" /></div>
         ) : (
           <div>
-            {/* Warehouse History Line Graph */}
-            {whHistory.length > 0 && (
-              <div className="glass-panel" style={{ height: '240px', marginBottom: '24px', display: 'flex', flexDirection: 'column' }}>
-                <h3 style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '12px' }}>Warehouse B.O. History</h3>
-                <div style={{ flex: 1 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={whHistory} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                      <XAxis dataKey="date" stroke="var(--text-muted)" fontSize={11} />
-                      <YAxis stroke="var(--text-muted)" fontSize={11} />
-                      <Tooltip {...chartTooltipStyle} />
-                      <Line type="monotone" dataKey="totalQty" stroke="#f59e0b" strokeWidth={2} dot={{ r: 4 }} name="Total Qty" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            )}
-
             {/* Bar + Pie Charts */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
               <div className="glass-panel" style={{ height: '260px', display: 'flex', flexDirection: 'column' }}>
@@ -348,10 +350,10 @@ const BackOrder: React.FC = () => {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={whCategoryChart} layout="vertical" margin={{ left: 0, right: 20 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
-                      <XAxis type="number" stroke="var(--text-muted)" fontSize={11} />
+                      <XAxis type="number" stroke="var(--text-muted)" fontSize={11} tickFormatter={v => `₱${(v / 1000).toFixed(0)}k`} />
                       <YAxis type="category" dataKey="name" width={90} stroke="var(--text-muted)" fontSize={10} />
-                      <Tooltip {...chartTooltipStyle} />
-                      <Bar dataKey="value" fill="#f59e0b" radius={[0, 4, 4, 0]} name="Qty" />
+                      <Tooltip {...chartTooltipStyle} formatter={(v: any) => formatCurrency(Number(v))} />
+                      <Bar dataKey="value" fill="#f59e0b" radius={[0, 4, 4, 0]} name="Amount" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -364,7 +366,7 @@ const BackOrder: React.FC = () => {
                       <Pie data={whBranchChart} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, percent = 0 }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={10}>
                         {whBranchChart.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                       </Pie>
-                      <Tooltip {...chartTooltipStyle} />
+                      <Tooltip {...chartTooltipStyle} formatter={(v: any) => formatCurrency(Number(v))} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -396,7 +398,8 @@ const BackOrder: React.FC = () => {
                   { key: 'product_description', label: 'Description' },
                   { key: 'uom', label: 'UOM' },
                   { key: 'qty', label: 'Qty', align: 'right' },
-                  { key: 'srs_reference', label: 'SRS No.' }
+                  { key: 'srs_reference', label: 'SRS No.' },
+                  { key: 'amount', label: 'Amount', align: 'right' }
                 ]}
                 rows={filteredWh}
                 emptyMsg="No warehouse B.O. items. Upload a Warehouse B.O. file in the Data page."
@@ -408,28 +411,10 @@ const BackOrder: React.FC = () => {
 
       {/* ═══ VAN TAB ═════════════════════════════════════════════════════════ */}
       {activeTab === 'van' && canSeeAdminTabs && (
-        vanLoading ? (
+        (vanLoading || priceLoading) ? (
           <div className="flex-center" style={{ height: '30vh', color: 'var(--accent-primary)' }}><Loader2 size={32} className="animate-spin" /></div>
         ) : (
           <div>
-            {/* Van History Line Graph */}
-            {vanHistory.length > 0 && (
-              <div className="glass-panel" style={{ height: '240px', marginBottom: '24px', display: 'flex', flexDirection: 'column' }}>
-                <h3 style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '12px' }}>Van B.O. History</h3>
-                <div style={{ flex: 1 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={vanHistory} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                      <XAxis dataKey="date" stroke="var(--text-muted)" fontSize={11} />
-                      <YAxis stroke="var(--text-muted)" fontSize={11} />
-                      <Tooltip {...chartTooltipStyle} />
-                      <Line type="monotone" dataKey="totalQty" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 4 }} name="Total Qty" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            )}
-
             {/* Bar + Pie Charts */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
               <div className="glass-panel" style={{ height: '260px', display: 'flex', flexDirection: 'column' }}>
@@ -438,10 +423,10 @@ const BackOrder: React.FC = () => {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={vanCategoryChart} layout="vertical" margin={{ left: 0, right: 20 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
-                      <XAxis type="number" stroke="var(--text-muted)" fontSize={11} />
+                      <XAxis type="number" stroke="var(--text-muted)" fontSize={11} tickFormatter={v => `₱${(v / 1000).toFixed(0)}k`} />
                       <YAxis type="category" dataKey="name" width={90} stroke="var(--text-muted)" fontSize={10} />
-                      <Tooltip {...chartTooltipStyle} />
-                      <Bar dataKey="value" fill="#8b5cf6" radius={[0, 4, 4, 0]} name="Qty" />
+                      <Tooltip {...chartTooltipStyle} formatter={(v: any) => formatCurrency(Number(v))} />
+                      <Bar dataKey="value" fill="#8b5cf6" radius={[0, 4, 4, 0]} name="Amount" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -454,7 +439,7 @@ const BackOrder: React.FC = () => {
                       <Pie data={vanShareChart} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, percent = 0 }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={10}>
                         {vanShareChart.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                       </Pie>
-                      <Tooltip {...chartTooltipStyle} />
+                      <Tooltip {...chartTooltipStyle} formatter={(v: any) => formatCurrency(Number(v))} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -480,7 +465,7 @@ const BackOrder: React.FC = () => {
                   }}>
                   <div style={{ fontSize: '13px', fontWeight: 700, color: selectedVan === v.van_code ? 'var(--accent-primary)' : 'var(--text-main)', fontFamily: 'monospace' }}>{v.van_code}</div>
                   <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>{v.salesman_name}</div>
-                  <div style={{ fontSize: '14px', fontWeight: 600, color: '#8b5cf6', marginTop: '6px' }}>{v.totalQty.toLocaleString()} units</div>
+                  <div style={{ fontSize: '14px', fontWeight: 600, color: '#8b5cf6', marginTop: '6px' }}>{formatCurrency(v.totalAmount)}</div>
                 </div>
               ))}
             </div>
@@ -510,7 +495,8 @@ const BackOrder: React.FC = () => {
                   { key: 'product_code', label: 'Product Code' },
                   { key: 'product_description', label: 'Description' },
                   { key: 'uom', label: 'UOM' },
-                  { key: 'qty', label: 'Qty', align: 'right' }
+                  { key: 'qty', label: 'Qty', align: 'right' },
+                  { key: 'amount', label: 'Amount', align: 'right' }
                 ]}
                 rows={filteredVan}
                 emptyMsg="No van B.O. items. Upload a Van B.O. file in the Data page."

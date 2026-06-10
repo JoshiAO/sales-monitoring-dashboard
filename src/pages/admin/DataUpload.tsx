@@ -17,7 +17,8 @@ const uploadCategories = [
   'NPD & Promo Pack Items',
   'Ageing Report',
   'Warehouse B.O.',
-  'Van B.O.'
+  'Van B.O.',
+  'Pricelist'
 ];
 
 interface AggregatedMetrics {
@@ -725,7 +726,7 @@ const DataUpload: React.FC = () => {
               [`dates.${cobDate.replace(/-/g, '_')}`]: totalQty,
               last_updated: new Date().toISOString()
             }, { merge: true });
-            await setDoc(doc(db, 'settings', 'global'), { lastWarehouseBoUpload: Date.now() }, { merge: true });
+            await setDoc(doc(db, 'settings', 'global'), { lastWarehouseBoUpload: Date.now(), warehouseBoDate: cobDate }, { merge: true });
           }
 
           // === VAN BO UPLOAD ===
@@ -791,7 +792,46 @@ const DataUpload: React.FC = () => {
               [`dates.${cobDate.replace(/-/g, '_')}`]: totalQtyVan,
               last_updated: new Date().toISOString()
             }, { merge: true });
-            await setDoc(doc(db, 'settings', 'global'), { lastVanBoUpload: Date.now() }, { merge: true });
+            await setDoc(doc(db, 'settings', 'global'), { lastVanBoUpload: Date.now(), vanBoDate: cobDate }, { merge: true });
+          }
+
+          // === PRICELIST UPLOAD ===
+          else if (category === 'Pricelist') {
+            setProgress({ step: 'Clearing old Pricelist data...', current: 0, total: 100 });
+            const oldPriceSnap = await getDocs(collection(db, 'reference_pricelist'));
+            const pClearBatch = writeBatch(db);
+            oldPriceSnap.forEach(d => pClearBatch.delete(d.ref));
+            await pClearBatch.commit();
+
+            const getValueP = (row: any, keys: string[]) => {
+              for (const k of keys) {
+                if (row[k] !== undefined && row[k] !== null) return row[k];
+              }
+              const rowKeys = Object.keys(row);
+              for (const k of keys) {
+                const normalizedK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+                const match = rowKeys.find(rk => rk.toLowerCase().replace(/[^a-z0-9]/g, '') === normalizedK);
+                if (match && row[match] !== undefined && row[match] !== null) return row[match];
+              }
+              return '';
+            };
+
+            const normalizedPrices = json.map((row: any) => ({
+              product_code: String(getValueP(row, ['product_code', 'Product Code', 'ProductCode']) || ''),
+              product_description: String(getValueP(row, ['product_description', 'Product Description', 'Description']) || ''),
+              Case: parseFloat(getValueP(row, ['Case', 'case', 'CASE', 'CS']) || 0),
+              Subcase: parseFloat(getValueP(row, ['Subcase', 'subcase', 'SUBCASE', 'SCS', 'Sub Case']) || 0),
+              Piece: parseFloat(getValueP(row, ['Piece', 'piece', 'PIECE', 'PC', 'pc']) || 0)
+            }));
+
+            const CHUNK_SIZE = 200;
+            for (let i = 0; i < normalizedPrices.length; i += CHUNK_SIZE) {
+              const chunk = normalizedPrices.slice(i, i + CHUNK_SIZE);
+              const chunkIndex = Math.floor(i / CHUNK_SIZE);
+              await setDoc(doc(collection(db, 'reference_pricelist'), `chunk_${chunkIndex}`), { rows: JSON.stringify(chunk) });
+              setProgress({ step: 'Uploading Pricelist...', current: Math.min(i + CHUNK_SIZE, normalizedPrices.length), total: normalizedPrices.length });
+            }
+            await setDoc(doc(db, 'settings', 'global'), { lastPricelistUpload: Date.now() }, { merge: true });
           }
 
           // === RAW DATA UPLOAD (legacy reference types) ===

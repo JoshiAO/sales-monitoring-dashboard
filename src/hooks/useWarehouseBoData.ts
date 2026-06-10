@@ -3,6 +3,9 @@ import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../contexts/AuthContext';
 import { get, set } from 'idb-keyval';
+import { getPrice } from './usePricelist';
+import type { PriceMap } from './usePricelist';
+
 
 export interface WarehouseBoItem {
   date: string;
@@ -13,21 +16,18 @@ export interface WarehouseBoItem {
   uom: string;
   qty: number;
   srs_reference: string;
+  amount: number;
 }
 
-export interface BoHistoryPoint {
-  date: string;
-  totalQty: number;
-}
-
-export const useWarehouseBoData = () => {
+export const useWarehouseBoData = (priceMap: PriceMap) => {
   const { currentUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<WarehouseBoItem[]>([]);
-  const [history, setHistory] = useState<BoHistoryPoint[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [branches, setBranches] = useState<string[]>([]);
   const [totalQty, setTotalQty] = useState(0);
+  const [totalAmount, setTotalAmount] = useState(0);
+  const [uploadDate, setUploadDate] = useState('');
 
   useEffect(() => {
     if (!currentUser) return;
@@ -37,13 +37,13 @@ export const useWarehouseBoData = () => {
         const globalDoc = await getDoc(doc(db, 'settings', 'global'));
         const globalData = globalDoc.exists() ? globalDoc.data() : null;
         const lastWarehouseBoUpload = globalData?.lastWarehouseBoUpload || 0;
-        const cobDate = globalData?.cobDate || new Date().toISOString().split('T')[0];
+        setUploadDate(globalData?.warehouseBoDate || '');
 
-        const cacheKey = 'warehouse_bo_cache_v1';
+        const cacheKey = 'warehouse_bo_cache_v2';
         const cachedData = await get(cacheKey);
-        const cachedUpload = await get('warehouse_bo_lastUpload');
+        const cachedUpload = await get('warehouse_bo_lastUpload_v2');
 
-        let parsedItems: WarehouseBoItem[] = [];
+        let parsedItems: Omit<WarehouseBoItem, 'amount'>[] = [];
         if (cachedData && cachedUpload === lastWarehouseBoUpload) {
           parsedItems = cachedData;
         } else {
@@ -71,7 +71,7 @@ export const useWarehouseBoData = () => {
             return '';
           };
 
-          const parseRow = (r: any): WarehouseBoItem => ({
+          const parseRow = (r: any): Omit<WarehouseBoItem, 'amount'> => ({
             date: formatExcelDate(getValue(r, ['date', 'Date'])),
             branch_name: String(getValue(r, ['branch_name', 'Branch Name', 'Branch']) || ''),
             category: String(getValue(r, ['category', 'Category']) || ''),
@@ -85,38 +85,32 @@ export const useWarehouseBoData = () => {
           snap.forEach(d => {
             const data = d.data();
             if (data.rows) {
-              // Chunked format
               const chunk = JSON.parse(data.rows);
               chunk.forEach((r: any) => parsedItems.push(parseRow(r)));
             } else {
-              // Old per-row format fallback
               parsedItems.push(parseRow(data));
             }
           });
           await set(cacheKey, parsedItems);
-          await set('warehouse_bo_lastUpload', lastWarehouseBoUpload);
+          await set('warehouse_bo_lastUpload_v2', lastWarehouseBoUpload);
         }
 
-        const total = parsedItems.reduce((sum, i) => sum + i.qty, 0);
-        const cats = Array.from(new Set(parsedItems.map(i => i.category).filter(Boolean))).sort();
-        const brs = Array.from(new Set(parsedItems.map(i => i.branch_name).filter(Boolean))).sort();
+        // Apply pricelist to compute amount
+        const withAmount: WarehouseBoItem[] = parsedItems.map(item => ({
+          ...item,
+          amount: item.qty * getPrice(priceMap, item.product_code, item.uom)
+        }));
 
-        // Fetch history for current month
-        const monthKey = cobDate.substring(0, 7);
-        const histDoc = await getDoc(doc(db, 'warehouse_bo_history', monthKey));
-        const historyPoints: BoHistoryPoint[] = [];
-        if (histDoc.exists()) {
-          const datesData = histDoc.data().dates || {};
-          Object.keys(datesData).sort().forEach(dateKey => {
-            historyPoints.push({ date: dateKey.replace(/_/g, '-'), totalQty: datesData[dateKey] || 0 });
-          });
-        }
+        const total = withAmount.reduce((sum, i) => sum + i.qty, 0);
+        const totalAmt = withAmount.reduce((sum, i) => sum + i.amount, 0);
+        const cats = Array.from(new Set(withAmount.map(i => i.category).filter(Boolean))).sort();
+        const brs = Array.from(new Set(withAmount.map(i => i.branch_name).filter(Boolean))).sort();
 
-        setItems(parsedItems);
-        setHistory(historyPoints);
+        setItems(withAmount);
         setCategories(cats);
         setBranches(brs);
         setTotalQty(total);
+        setTotalAmount(totalAmt);
       } catch (err) {
         console.error('Error fetching Warehouse BO data:', err);
       } finally {
@@ -124,7 +118,7 @@ export const useWarehouseBoData = () => {
       }
     };
     fetchData();
-  }, [currentUser]);
+  }, [currentUser, priceMap]);
 
-  return { loading, items, history, categories, branches, totalQty };
+  return { loading, items, categories, branches, totalQty, totalAmount, uploadDate };
 };

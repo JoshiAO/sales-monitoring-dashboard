@@ -4,6 +4,9 @@ import { db } from '../firebase/config';
 import { useAuth } from '../contexts/AuthContext';
 import { get, set } from 'idb-keyval';
 import { useUsersCache } from './useUsersCache';
+import { getPrice } from './usePricelist';
+import type { PriceMap } from './usePricelist';
+
 
 export interface VanBoItem {
   date: string;
@@ -15,6 +18,7 @@ export interface VanBoItem {
   product_description: string;
   uom: string;
   qty: number;
+  amount: number;
 }
 
 export interface VanCard {
@@ -22,22 +26,19 @@ export interface VanCard {
   salesman_code: string;
   salesman_name: string;
   totalQty: number;
+  totalAmount: number;
 }
 
-export interface BoHistoryPoint {
-  date: string;
-  totalQty: number;
-}
-
-export const useVanBoData = () => {
+export const useVanBoData = (priceMap: PriceMap) => {
   const { currentUser } = useAuth();
   const { usersCache, loading: usersLoading } = useUsersCache();
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<VanBoItem[]>([]);
-  const [history, setHistory] = useState<BoHistoryPoint[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [vans, setVans] = useState<VanCard[]>([]);
   const [totalQty, setTotalQty] = useState(0);
+  const [totalAmount, setTotalAmount] = useState(0);
+  const [uploadDate, setUploadDate] = useState('');
 
   useEffect(() => {
     if (!currentUser || usersLoading) return;
@@ -47,13 +48,13 @@ export const useVanBoData = () => {
         const globalDoc = await getDoc(doc(db, 'settings', 'global'));
         const globalData = globalDoc.exists() ? globalDoc.data() : null;
         const lastVanBoUpload = globalData?.lastVanBoUpload || 0;
-        const cobDate = globalData?.cobDate || new Date().toISOString().split('T')[0];
+        setUploadDate(globalData?.vanBoDate || '');
 
-        const cacheKey = 'van_bo_cache_v1';
+        const cacheKey = 'van_bo_cache_v2';
         const cachedData = await get(cacheKey);
-        const cachedUpload = await get('van_bo_lastUpload');
+        const cachedUpload = await get('van_bo_lastUpload_v2');
 
-        let parsedItems: VanBoItem[] = [];
+        let parsedItems: Omit<VanBoItem, 'amount'>[] = [];
         if (cachedData && cachedUpload === lastVanBoUpload) {
           parsedItems = cachedData;
         } else {
@@ -81,7 +82,7 @@ export const useVanBoData = () => {
             return '';
           };
 
-          const parseRow = (r: any): VanBoItem => ({
+          const parseRow = (r: any): Omit<VanBoItem, 'amount'> => ({
             date: formatExcelDate(getValue(r, ['date', 'Date'])),
             branch_name: String(getValue(r, ['branch_name', 'Branch Name', 'Branch']) || ''),
             van_code: String(getValue(r, ['van_code', 'Van Code', 'Van']) || ''),
@@ -96,17 +97,21 @@ export const useVanBoData = () => {
           snap.forEach(d => {
             const data = d.data();
             if (data.rows) {
-              // New chunked format
               const chunk = JSON.parse(data.rows);
               chunk.forEach((r: any) => parsedItems.push(parseRow(r)));
             } else {
-              // Old per-row format fallback
               parsedItems.push(parseRow(data));
             }
           });
           await set(cacheKey, parsedItems);
-          await set('van_bo_lastUpload', lastVanBoUpload);
+          await set('van_bo_lastUpload_v2', lastVanBoUpload);
         }
+
+        // Apply pricelist to compute amount
+        const withAmount: VanBoItem[] = parsedItems.map(item => ({
+          ...item,
+          amount: item.qty * getPrice(priceMap, item.product_code, item.uom)
+        }));
 
         // Fetch user names for van card display
         const userNames2: Record<string, string> = {};
@@ -114,41 +119,33 @@ export const useVanBoData = () => {
           if (u.salesmanId && u.name) userNames2[String(u.salesmanId)] = u.name;
         });
 
-        const total = parsedItems.reduce((sum, i) => sum + i.qty, 0);
-        const cats = Array.from(new Set(parsedItems.map(i => i.category).filter(Boolean))).sort();
+        const total = withAmount.reduce((sum, i) => sum + i.qty, 0);
+        const totalAmt = withAmount.reduce((sum, i) => sum + i.amount, 0);
+        const cats = Array.from(new Set(withAmount.map(i => i.category).filter(Boolean))).sort();
 
         // Build van cards
-        const vanMap: Record<string, { salesman_code: string; totalQty: number }> = {};
-        parsedItems.forEach(item => {
+        const vanMap: Record<string, { salesman_code: string; totalQty: number; totalAmount: number }> = {};
+        withAmount.forEach(item => {
           if (!item.van_code) return;
           if (!vanMap[item.van_code]) {
-            vanMap[item.van_code] = { salesman_code: item.salesman_code, totalQty: 0 };
+            vanMap[item.van_code] = { salesman_code: item.salesman_code, totalQty: 0, totalAmount: 0 };
           }
           vanMap[item.van_code].totalQty += item.qty;
+          vanMap[item.van_code].totalAmount += item.amount;
         });
         const vanList: VanCard[] = Object.keys(vanMap).map(code => ({
           van_code: code,
           salesman_code: vanMap[code].salesman_code,
           salesman_name: userNames2[vanMap[code].salesman_code] || vanMap[code].salesman_code,
-          totalQty: vanMap[code].totalQty
-        })).sort((a, b) => b.totalQty - a.totalQty);
+          totalQty: vanMap[code].totalQty,
+          totalAmount: vanMap[code].totalAmount
+        })).sort((a, b) => b.totalAmount - a.totalAmount);
 
-        // Fetch history for current month
-        const monthKey = cobDate.substring(0, 7);
-        const histDoc = await getDoc(doc(db, 'van_bo_history', monthKey));
-        const historyPoints: BoHistoryPoint[] = [];
-        if (histDoc.exists()) {
-          const datesData = histDoc.data().dates || {};
-          Object.keys(datesData).sort().forEach(dateKey => {
-            historyPoints.push({ date: dateKey.replace(/_/g, '-'), totalQty: datesData[dateKey] || 0 });
-          });
-        }
-
-        setItems(parsedItems);
-        setHistory(historyPoints);
+        setItems(withAmount);
         setCategories(cats);
         setVans(vanList);
         setTotalQty(total);
+        setTotalAmount(totalAmt);
       } catch (err) {
         console.error('Error fetching Van BO data:', err);
       } finally {
@@ -156,7 +153,7 @@ export const useVanBoData = () => {
       }
     };
     fetchData();
-  }, [currentUser, usersLoading]);
+  }, [currentUser, usersLoading, priceMap]);
 
-  return { loading, items, history, categories, vans, totalQty };
+  return { loading, items, categories, vans, totalQty, totalAmount, uploadDate };
 };
