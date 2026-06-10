@@ -38,8 +38,28 @@ export const useAgeingData = () => {
         const cacheKey = 'ageing_data_cache_v3';
         const cachedData = await get(cacheKey);
         const cachedUpload = await get('ageing_lastUpload');
+        const recalculateDaysToGo = (items: AgeingRow[]) => {
+          const now = new Date();
+          now.setHours(0, 0, 0, 0);
+          return items.map(item => {
+            let daysToGo = item.days_to_go;
+            if (item.expiry_date) {
+              const expiry = new Date(item.expiry_date);
+              if (!isNaN(expiry.getTime())) {
+                expiry.setHours(0, 0, 0, 0);
+                const diffTime = expiry.getTime() - now.getTime();
+                daysToGo = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+              }
+            }
+            if (typeof daysToGo === 'number' && daysToGo <= 0) {
+              daysToGo = 'Expired';
+            }
+            return { ...item, days_to_go: daysToGo };
+          });
+        };
+
         if (cachedData && cachedUpload === lastAgeingUpload) {
-          setRows(cachedData);
+          setRows(recalculateDaysToGo(cachedData));
           setLoading(false);
           return;
         }
@@ -110,7 +130,7 @@ export const useAgeingData = () => {
 
         await set(cacheKey, allRows);
         await set('ageing_lastUpload', lastAgeingUpload);
-        setRows(allRows);
+        setRows(recalculateDaysToGo(allRows));
       } catch (err) {
         console.error('Error fetching Ageing data:', err);
       } finally {
