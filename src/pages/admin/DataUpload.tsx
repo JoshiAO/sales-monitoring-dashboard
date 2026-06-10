@@ -672,18 +672,52 @@ const DataUpload: React.FC = () => {
             oldWSnap.forEach(d => wClearBatch.delete(d.ref));
             await wClearBatch.commit();
 
-            const BATCH_SIZE = 450;
+            // Normalize rows and convert Excel serial dates
+            const formatExcelDateW = (val: any) => {
+              if (!val) return '';
+              if (typeof val === 'number') {
+                const d = new Date((val - 25569) * 86400 * 1000);
+                return d.toISOString().split('T')[0];
+              }
+              return String(val);
+            };
+
+            const getValueW = (row: any, keys: string[]) => {
+              for (const k of keys) {
+                if (row[k] !== undefined && row[k] !== null) return row[k];
+              }
+              const rowKeys = Object.keys(row);
+              for (const k of keys) {
+                const normalizedK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+                const match = rowKeys.find(rk => rk.toLowerCase().replace(/[^a-z0-9]/g, '') === normalizedK);
+                if (match && row[match] !== undefined && row[match] !== null) return row[match];
+              }
+              return '';
+            };
+
             let totalQty = 0;
-            for (let i = 0; i < json.length; i += BATCH_SIZE) {
-              const batch = writeBatch(db);
-              json.slice(i, i + BATCH_SIZE).forEach((row: any, idx: number) => {
-                const cleanRow = JSON.parse(JSON.stringify(row));
-                totalQty += parseFloat(cleanRow['qty'] || cleanRow['Qty'] || 0);
-                const docRef = doc(collection(db, 'warehouse_bo_data'), `row_${i + idx}`);
-                batch.set(docRef, cleanRow);
-              });
-              await batch.commit();
-              setProgress({ step: 'Uploading Warehouse B.O. data...', current: Math.min(i + BATCH_SIZE, json.length), total: json.length });
+            const normalizedRows = json.map((row: any) => {
+              const qtyVal = parseFloat(getValueW(row, ['qty', 'Qty', 'QTY']) || 0);
+              totalQty += qtyVal;
+              return {
+                date: formatExcelDateW(getValueW(row, ['date', 'Date', 'DATE'])),
+                branch_name: String(getValueW(row, ['branch_name', 'Branch Name', 'Branch', 'branch']) || ''),
+                category: String(getValueW(row, ['category', 'Category', 'CATEGORY']) || ''),
+                product_code: String(getValueW(row, ['product_code', 'Product Code', 'Product_Code']) || ''),
+                product_description: String(getValueW(row, ['product_description', 'Product Description', 'Description']) || ''),
+                uom: String(getValueW(row, ['UOM', 'uom', 'Uom']) || ''),
+                qty: qtyVal,
+                srs_reference: String(getValueW(row, ['srs_reference', 'SRS Reference', 'SRS No.']) || '')
+              };
+            });
+
+            // Write in chunks of 200 rows per doc
+            const CHUNK_SIZE = 200;
+            for (let i = 0; i < normalizedRows.length; i += CHUNK_SIZE) {
+              const chunk = normalizedRows.slice(i, i + CHUNK_SIZE);
+              const chunkIndex = Math.floor(i / CHUNK_SIZE);
+              await setDoc(doc(collection(db, 'warehouse_bo_data'), `chunk_${chunkIndex}`), { rows: JSON.stringify(chunk) });
+              setProgress({ step: 'Uploading Warehouse B.O. data...', current: Math.min(i + CHUNK_SIZE, normalizedRows.length), total: normalizedRows.length });
             }
             // Stack history
             const wMonthKey = cobDate.substring(0, 7);
@@ -702,18 +736,54 @@ const DataUpload: React.FC = () => {
             oldVSnap.forEach(d => vClearBatch.delete(d.ref));
             await vClearBatch.commit();
 
-            const BATCH_SIZE = 450;
+            // Normalize rows and convert Excel serial dates
+            const formatExcelDate = (val: any) => {
+              if (!val) return '';
+              if (typeof val === 'number') {
+                const d = new Date((val - 25569) * 86400 * 1000);
+                return d.toISOString().split('T')[0];
+              }
+              return String(val);
+            };
+
+            const getValue = (row: any, keys: string[]) => {
+              for (const k of keys) {
+                if (row[k] !== undefined && row[k] !== null) return row[k];
+              }
+              // Also try case-insensitive match
+              const rowKeys = Object.keys(row);
+              for (const k of keys) {
+                const normalizedK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+                const match = rowKeys.find(rk => rk.toLowerCase().replace(/[^a-z0-9]/g, '') === normalizedK);
+                if (match && row[match] !== undefined && row[match] !== null) return row[match];
+              }
+              return '';
+            };
+
             let totalQtyVan = 0;
-            for (let i = 0; i < json.length; i += BATCH_SIZE) {
-              const batch = writeBatch(db);
-              json.slice(i, i + BATCH_SIZE).forEach((row: any, idx: number) => {
-                const cleanRow = JSON.parse(JSON.stringify(row));
-                totalQtyVan += parseFloat(cleanRow['qty'] || cleanRow['Qty'] || 0);
-                const docRef = doc(collection(db, 'van_bo_data'), `row_${i + idx}`);
-                batch.set(docRef, cleanRow);
-              });
-              await batch.commit();
-              setProgress({ step: 'Uploading Van B.O. data...', current: Math.min(i + BATCH_SIZE, json.length), total: json.length });
+            const normalizedRows = json.map((row: any) => {
+              const qtyVal = parseFloat(getValue(row, ['qty', 'Qty', 'QTY']) || 0);
+              totalQtyVan += qtyVal;
+              return {
+                date: formatExcelDate(getValue(row, ['date', 'Date', 'DATE'])),
+                branch_name: String(getValue(row, ['branch_name', 'Branch Name', 'Branch', 'branch']) || ''),
+                van_code: String(getValue(row, ['van_code', 'Van Code', 'Van', 'van_code']) || ''),
+                salesman_code: String(getValue(row, ['salesman_code', 'Salesman Code', 'Salesman_Code']) || ''),
+                category: String(getValue(row, ['category', 'Category', 'CATEGORY']) || ''),
+                product_code: String(getValue(row, ['product_code', 'Product Code', 'Product_Code', 'ProductCode']) || ''),
+                product_description: String(getValue(row, ['product_description', 'Product Description', 'Description', 'product_description']) || ''),
+                uom: String(getValue(row, ['UOM', 'uom', 'Uom']) || ''),
+                qty: qtyVal
+              };
+            });
+
+            // Write in chunks of 200 rows per doc (like ageing)
+            const CHUNK_SIZE = 200;
+            for (let i = 0; i < normalizedRows.length; i += CHUNK_SIZE) {
+              const chunk = normalizedRows.slice(i, i + CHUNK_SIZE);
+              const chunkIndex = Math.floor(i / CHUNK_SIZE);
+              await setDoc(doc(collection(db, 'van_bo_data'), `chunk_${chunkIndex}`), { rows: JSON.stringify(chunk) });
+              setProgress({ step: 'Uploading Van B.O. data...', current: Math.min(i + CHUNK_SIZE, normalizedRows.length), total: normalizedRows.length });
             }
             // Stack history
             const vMonthKey = cobDate.substring(0, 7);

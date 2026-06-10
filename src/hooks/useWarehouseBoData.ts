@@ -48,18 +48,50 @@ export const useWarehouseBoData = () => {
           parsedItems = cachedData;
         } else {
           const snap = await getDocs(collection(db, 'warehouse_bo_data'));
+
+          const formatExcelDate = (val: any) => {
+            if (!val) return '';
+            if (typeof val === 'number') {
+              const d = new Date((val - 25569) * 86400 * 1000);
+              return d.toISOString().split('T')[0];
+            }
+            return String(val);
+          };
+
+          const getValue = (r: any, keys: string[]) => {
+            for (const k of keys) {
+              if (r[k] !== undefined && r[k] !== null) return r[k];
+            }
+            const rowKeys = Object.keys(r);
+            for (const k of keys) {
+              const nk = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+              const match = rowKeys.find(rk => rk.toLowerCase().replace(/[^a-z0-9]/g, '') === nk);
+              if (match && r[match] !== undefined && r[match] !== null) return r[match];
+            }
+            return '';
+          };
+
+          const parseRow = (r: any): WarehouseBoItem => ({
+            date: formatExcelDate(getValue(r, ['date', 'Date'])),
+            branch_name: String(getValue(r, ['branch_name', 'Branch Name', 'Branch']) || ''),
+            category: String(getValue(r, ['category', 'Category']) || ''),
+            product_code: String(getValue(r, ['product_code', 'Product Code']) || ''),
+            product_description: String(getValue(r, ['product_description', 'Product Description', 'Description']) || ''),
+            uom: String(getValue(r, ['UOM', 'uom']) || ''),
+            qty: parseFloat(getValue(r, ['qty', 'Qty']) || 0),
+            srs_reference: String(getValue(r, ['srs_reference', 'SRS Reference', 'SRS No.']) || '')
+          });
+
           snap.forEach(d => {
-            const r = d.data();
-            parsedItems.push({
-              date: r['date'] || r['Date'] || '',
-              branch_name: r['branch_name'] || r['Branch Name'] || r['Branch'] || '',
-              category: r['category'] || r['Category'] || '',
-              product_code: r['product_code'] || r['Product Code'] || '',
-              product_description: r['product_description'] || r['Product Description'] || '',
-              uom: r['UOM'] || r['uom'] || '',
-              qty: parseFloat(r['qty'] || r['Qty'] || 0),
-              srs_reference: r['srs_reference'] || r['SRS Reference'] || r['SRS No.'] || ''
-            });
+            const data = d.data();
+            if (data.rows) {
+              // Chunked format
+              const chunk = JSON.parse(data.rows);
+              chunk.forEach((r: any) => parsedItems.push(parseRow(r)));
+            } else {
+              // Old per-row format fallback
+              parsedItems.push(parseRow(data));
+            }
           });
           await set(cacheKey, parsedItems);
           await set('warehouse_bo_lastUpload', lastWarehouseBoUpload);
