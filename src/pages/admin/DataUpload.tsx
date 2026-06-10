@@ -238,6 +238,10 @@ const DataUpload: React.FC = () => {
             await chunkBatch.commit();
 
             setProgress({ step: 'Saving Aggregated Dashboards...', current: 80, total: 100 });
+            // Read existing metrics to preserve cml_count (set by CML upload)
+            const existingMetricsSnap = await getDoc(doc(db, 'dashboard_metrics', 'all'));
+            const existingMetricsAll = existingMetricsSnap.exists() ? existingMetricsSnap.data() : {};
+
             const allMetricsDoc: Record<string, any> = {};
             Object.keys(metrics).forEach(salesmanCode => {
               const m = metrics[salesmanCode];
@@ -277,6 +281,9 @@ const DataUpload: React.FC = () => {
                 }
               });
 
+              // Preserve cml_count from existing data (set by CML upload)
+              const existingCml = existingMetricsAll[salesmanCode]?.cml_count;
+
               allMetricsDoc[salesmanCode] = {
                 salesman_code: m.salesman_code,
                 salesman_name: m.salesman_name,
@@ -291,6 +298,7 @@ const DataUpload: React.FC = () => {
                 brgy: m.brgy,
                 town: m.town,
                 frequency: { f1, f2, f3, f4 },
+                ...(existingCml !== undefined ? { cml_count: existingCml } : {}),
                 last_updated: new Date().toISOString()
               };
             });
