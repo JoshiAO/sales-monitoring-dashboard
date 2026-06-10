@@ -69,10 +69,10 @@ export const useDashboardData = (selectedTeam: string = 'all', forceAllSalesmen:
 
         const metricsCacheKey = 'dashboard_metrics_cache_v2';
         const referenceCacheKey = 'dashboard_reference_cache_v2';
-        
+
         const cachedMetrics = await get(metricsCacheKey);
         const cachedReference = await get(referenceCacheKey);
-        
+
         const cachedMetricsUpload = await get('dashboard_lastDataUpload');
         const cachedRefUpload = await get('dashboard_lastReferenceUpload');
 
@@ -109,13 +109,13 @@ export const useDashboardData = (selectedTeam: string = 'all', forceAllSalesmen:
 
           const sttRaw = sttSnap.exists() ? sttSnap.data() : {};
           sttData = Object.keys(sttRaw).map(k => ({ id: k, ...sttRaw[k] }));
-          
+
           const vd30Raw = vd30Snap.exists() ? vd30Snap.data() : {};
           vd30Data = Object.keys(vd30Raw).map(k => ({ id: k, ...vd30Raw[k] }));
-          
+
           const teamRaw = teamSnap.exists() ? teamSnap.data() : {};
           teamData = Object.keys(teamRaw).map(k => ({ id: k, ...teamRaw[k] }));
-          
+
           const refVd30Raw = refVd30Snap.exists() ? refVd30Snap.data() : {};
           refVd30Data = Object.keys(refVd30Raw).map(k => ({ id: k, ...refVd30Raw[k] }));
 
@@ -125,7 +125,7 @@ export const useDashboardData = (selectedTeam: string = 'all', forceAllSalesmen:
 
         // Fetch non-cached data
         const settingsSnap = await getDoc(doc(db, 'settings', 'performance_panel'));
-        
+
         const userAvatars: Record<string, string> = {};
         const userNames: Record<string, string> = {};
         const userTypes: Record<string, string> = {};
@@ -136,10 +136,10 @@ export const useDashboardData = (selectedTeam: string = 'all', forceAllSalesmen:
             if (u.salesmanType) userTypes[String(u.salesmanId)] = u.salesmanType;
           }
         });
-        
+
         const excludedSalesmen = settingsSnap.exists() ? (settingsSnap.data().excluded_salesmen || []) : [];
         const excludedVd30Salesmen = settingsSnap.exists() ? (settingsSnap.data().excluded_vd30_salesmen || []) : [];
-        
+
         const vd30DescMap: Record<string, string> = {};
         refVd30Data.forEach((v: any) => {
           if (v.vd30_code) {
@@ -221,7 +221,7 @@ export const useDashboardData = (selectedTeam: string = 'all', forceAllSalesmen:
           }
           if (m.categories) Object.keys(m.categories).forEach(k => categoriesMap[k] = (categoriesMap[k] || 0) + m.categories[k]);
           if (m.channels) Object.keys(m.channels).forEach(k => channelsMap[k] = (channelsMap[k] || 0) + m.channels[k]);
-          
+
           const geoSource = role === 'salesman' ? m.brgy : m.town;
           if (geoSource) Object.keys(geoSource).forEach(k => geoMap[k] = (geoMap[k] || 0) + geoSource[k]);
 
@@ -248,7 +248,7 @@ export const useDashboardData = (selectedTeam: string = 'all', forceAllSalesmen:
           const ubaTgt = parseFloat(t['uba target']) || 0;
           totalTarget += target;
           totalUbaTarget += ubaTgt;
-          
+
           if (salesmenData[t.id]) {
             salesmenData[t.id].target = target;
             salesmenData[t.id].ubaTarget = ubaTgt;
@@ -269,7 +269,7 @@ export const useDashboardData = (selectedTeam: string = 'all', forceAllSalesmen:
             salesmenData[t.id].vd30TargetMap = salesmanVd30TargetMap;
           }
         });
-        
+
         // Evaluate per-salesman VD30 performance based on actuals meeting targets
         Object.values(salesmenData).forEach(s => {
           let targetCount = 0;
@@ -309,22 +309,22 @@ export const useDashboardData = (selectedTeam: string = 'all', forceAllSalesmen:
         const monthKey = cobDate.substring(0, 7); // e.g. "2026-06"
         const globalPointsMap: Record<string, { gold: number, silver: number, bronze: number, points: number }> = {};
         let rawDailyAchievements: Record<string, any> = {};
-        
+
         try {
           const achDoc = await getDoc(doc(db, 'achievements', monthKey));
           if (achDoc.exists()) {
-             const dailyPoints = achDoc.data().daily_points || {};
-             rawDailyAchievements = dailyPoints;
-             // Aggregate all days for the month
-             Object.values(dailyPoints).forEach((dayMap: any) => {
-                Object.keys(dayMap).forEach(salesmanId => {
-                   if (!globalPointsMap[salesmanId]) globalPointsMap[salesmanId] = { gold: 0, silver: 0, bronze: 0, points: 0 };
-                   globalPointsMap[salesmanId].gold += dayMap[salesmanId].gold || 0;
-                   globalPointsMap[salesmanId].silver += dayMap[salesmanId].silver || 0;
-                   globalPointsMap[salesmanId].bronze += dayMap[salesmanId].bronze || 0;
-                   globalPointsMap[salesmanId].points += dayMap[salesmanId].points || 0;
-                });
-             });
+            const dailyPoints = achDoc.data().daily_points || {};
+            rawDailyAchievements = dailyPoints;
+            // Aggregate all days for the month
+            Object.values(dailyPoints).forEach((dayMap: any) => {
+              Object.keys(dayMap).forEach(salesmanId => {
+                if (!globalPointsMap[salesmanId]) globalPointsMap[salesmanId] = { gold: 0, silver: 0, bronze: 0, points: 0 };
+                globalPointsMap[salesmanId].gold += dayMap[salesmanId].gold || 0;
+                globalPointsMap[salesmanId].silver += dayMap[salesmanId].silver || 0;
+                globalPointsMap[salesmanId].bronze += dayMap[salesmanId].bronze || 0;
+                globalPointsMap[salesmanId].points += dayMap[salesmanId].points || 0;
+              });
+            });
           }
         } catch (err) {
           console.error("Error fetching achievements:", err);
@@ -362,9 +362,9 @@ export const useDashboardData = (selectedTeam: string = 'all', forceAllSalesmen:
         setLoading(false);
       }
     };
-    
+
     fetchData();
-  }, [currentUser, role, selectedTeam, forceAllSalesmen]);
+  }, [currentUser, role, selectedTeam, forceAllSalesmen, usersLoading]);
 
   return { loading, data };
 };
