@@ -13,7 +13,7 @@ export default defineConfig({
         enabled: true
       },
       manifest: {
-        name: 'Sales Monitoring & Gamification',
+        name: 'Interactive Sales Monitoring',
         short_name: 'Sales Monitor',
         description: 'Sales monitoring dashboard with role-based access',
         theme_color: '#0F172A',
@@ -21,9 +21,9 @@ export default defineConfig({
         display: 'standalone',
         icons: [
           {
-            src: 'favicon.svg',
+            src: 'JoshiAO.jpg',
             sizes: '192x192 512x512',
-            type: 'image/svg+xml',
+            type: 'image/jpeg',
             purpose: 'any maskable'
           }
         ]
