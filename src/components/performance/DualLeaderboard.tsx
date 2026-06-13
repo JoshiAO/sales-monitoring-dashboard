@@ -93,8 +93,6 @@ const DualLeaderboard: React.FC<DualLeaderboardProps> = ({ data, activeTab, curr
         if (!isApproved) return false;
 
         const sttPct = (s.mtdSales / (s.target || 1)) * 100;
-        const ubaPct = (s.uba / (s.ubaTarget || 1)) * 100;
-        const vd30Pct = (s.vd30 / (s.vd30Target || 1)) * 100;
         
         const actualVal = activeTab === 'STT' ? sttPct : activeTab === 'UBA' ? s.uba : s.vd30;
         

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { LayoutDashboard, ShoppingCart, Target, Users, Database, Settings, LogOut, Menu, BarChart2, Package, Clock, AlertTriangle, Medal, X, Megaphone } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Target, Users, Database, Settings, LogOut, Menu, BarChart2, Package, Clock, AlertTriangle, Medal, X } from 'lucide-react';
 import { logout } from '../../firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase/config';
@@ -175,7 +175,7 @@ const Layout: React.FC = () => {
       {/* Main Content Area */}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
         {systemAnnouncement && (
-          <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'rgba(15, 23, 42, 0.95)', backdropFilter: 'blur(10px)', borderBottom: '1px solid var(--border)' }}>
+          <div className="mobile-announcement" style={{ position: 'sticky', top: 0, zIndex: 40, background: 'rgba(15, 23, 42, 0.95)', backdropFilter: 'blur(10px)', borderBottom: '1px solid var(--border)' }}>
             <div style={{ background: 'rgba(234, 179, 8, 0.15)', color: '#facc15', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
               <AlertTriangle size={20} className="flex-shrink-0" />
               <div className="marquee-container" style={{ flex: 1, fontSize: '15px', fontWeight: '500' }}>
